@@ -284,7 +284,7 @@ Record model version, requirement version, manual or generated method, tool/vers
 | `T4` | `S2` | `E4 cancel` | `G4` cancellation allowed before completion | `A4` record cancellation | `S5` | Valid | HTTP 200; state is `Cancelled`; no processing job emitted |
 | `T5` | `S3` | `E4 cancel` | `G4` cancellation allowed before completion | `A4` record cancellation | `S5` | Valid | HTTP 200; state is `Cancelled`; no completion action afterward |
 | `T6` | `S3` | `E5 failure` | `G5` processing failure is detected | `A5` record reason | `S6` | Valid | Error reason persisted; state is `Failed`; retry event available |
-| `T7` | `S6` | `E6 retry` | `G6` retry is available | `A6` increment and restart | `S3` | Valid | Retry count increments exactly once; state is `InProgress`; one processing attempt emitted | 
+| `T7` | `S6` | `E6 retry` | `G6` retry is available | `A6` increment and restart | `S3` | Valid | Retry count increments exactly once; state is `InProgress`; one processing attempt emitted |
 
 Model exclusions and negative behavior:
 
@@ -321,9 +321,9 @@ S4, S5 are terminal
 | `ST1-01` | `Q1=(T1,T2,T3)` | Create order `O-101` with valid SKU, quantity, address, and payment reference; state `S1` | Submit; dispatch start; return successful processing | HTTP 202 on submit; states `S1 -> S2 -> S3 -> S4`; result and one completion notification persisted | `REQ-ORDER-LIFECYCLE`, `S1-S4`, `E1-E3`, `A1-A3` |
 | `ST1-02` | `T4` | Create valid `O-102` in `S2`; no worker start | Cancel order | HTTP 200; state `S5`; no processing event | `REQ-ORDER-LIFECYCLE`, `S2,S5`, `E4`, `A4` |
 | `ST1-02B` | `T5` | Create valid `O-102B` in `S3`; worker cancellation is enabled | Cancel order | HTTP 200; state `S5`; cancellation is persisted; no completion action afterward | `REQ-ORDER-LIFECYCLE`, `S3,S5`, `T5`, `E4`, `A4` |
-| `ST1-03` | `Q2=(T2,T6,T7,T3)` | Create submitted `O-103`; inject one processing failure | Start; inject failure; retry; complete | States `S2 -> S3 -> S6 -> S3 -> S4`; failure reason, retry count, result, and one completion notification are exact | `REQ-ORDER-LIFECYCLE`, `T2,T6,T7,T3` |                      
+| `ST1-03` | `Q2=(T2,T6,T7,T3)` | Create submitted `O-103`; inject one processing failure | Start; inject failure; retry; complete | States `S2 -> S3 -> S6 -> S3 -> S4`; failure reason, retry count, result, and one completion notification are exact | `REQ-ORDER-LIFECYCLE`, `T2,T6,T7,T3` |
 | `ST1-04A` | `T-TERM-1A` | Create completed `O-104A` with result and notification already recorded | Send cancel request | HTTP 409 `ORDER_ALREADY_COMPLETED`; state, result, audit, and notification count unchanged | `T-TERM-1A`, `S4`, `E4` |
-| `ST1-04B` | `T-TERM-1B` | Create completed `O-104B` with result and notification already recorded | Send completion event | HTTP 409 `ORDER_ALREADY_COMPLETED`; state, result, audit, and notification count unchanged | `T-TERM-1B`, `S4`, `E3` | 
+| `ST1-04B` | `T-TERM-1B` | Create completed `O-104B` with result and notification already recorded | Send completion event | HTTP 409 `ORDER_ALREADY_COMPLETED`; state, result, audit, and notification count unchanged | `T-TERM-1B`, `S4`, `E3` |
 | `ST1-05` | `T-INV-1` | Create draft `O-105` with valid draft data | Send completion event | HTTP 409 `ORDER_NOT_IN_PROGRESS`; state remains `S1`; no completion side effect | `T-INV-1`, `S1`, `E3` |
 
 **Coverage check**
@@ -353,7 +353,7 @@ Outside scope: all SKU and quantity partitions, payment behavior, concurrent can
 
 **Guards**
 
-| Guard ID | Predicate | True/false behavior | Status | 
+| Guard ID | Predicate | True/false behavior | Status |
 | --- | --- | --- | --- |
 | `G21` | `actor == document.owner` | True enables submission or reopen; false means a non-owner operation is forbidden | Assumption |
 | `G22` | `actor.hasApprovalAuthority == true` | True enables approval or rejection; false returns HTTP 403 | Assumption |
@@ -368,80 +368,24 @@ Outside scope: all SKU and quantity partitions, payment behavior, concurrent can
 | `A23` | Persist rejection reason | State `S24`; exact reason persisted | Assumption |
 | `A24` | Reopen document | State `S21`; reopen audit written | Assumption |
 
-**Guards**
+**Constraints**
 
-| Guard ID | Predicate | True/false behavior | Status | 
-| --- | --- | --- | --- |
-| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means forbidden owner operation | Assumption |
-| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
-| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption | 
+| Constraint ID | Rule | Affected elements | Consequence | Status |
+| --- | --- | --- | --- | --- |
+| `C21` | Only the owner may submit or reopen | `G21`, `T21`, `T24` | Non-owner attempts are forbidden | Assumption |
+| `C22` | Approval requires authority and a non-owner actor | `G22`, `G23`, `T22`, `T25`, `T26` | Failed guard returns HTTP 403 and leaves the document unchanged | Assumption |
 
-**Actions**
+**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are included.
 
-| Action ID | Meaning | Status |
-| --- | --- | --- |
-| `A21` | Persist pending approval and audit | Assumption |
-| `A22` | Persist approval and audit | Assumption |
-| `A23` | Persist rejection reason and audit | Assumption |
-| `A24` | Reopen and audit | Assumption | 
-
-**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
-
-| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle | 
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
-| `T22` | `S22` | Approve | `G22=true`, `G23=true` | `A22` | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
-| `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
-| `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
-| `T25` | `S22` | Approve | `G22=false` | None | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external side-effect mutation |
-| `T26` | `S22` | Approve | `G22=true`, `G23=false` | None | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external side-effect mutation |
-
-**Guards**
-
-| Guard ID | Predicate | True/false behavior | Status |
-| --- | --- | --- | --- |
-| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means a non-owner operation is forbidden | Assumption |
-| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
-| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption |
-
-**Actions**
-
-| Action ID | Operation/effect | Exact observable result | Status |
-| --- | --- | --- | --- |
-| `A21` | Persist pending approval | State `S22`; submission audit written | Assumption |
-| `A22` | Persist approval | State `S23`; approval audit names actor | Assumption |
-| `A23` | Persist rejection reason | State `S24`; exact reason persisted | Assumption |
-| `A24` | Reopen document | State `S21`; reopen audit written | Assumption |
-
-**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
-
-| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle | 
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
-| `T22` | `S22` | Approve | `G22=true` and `G23=true` | `A22` | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
-| `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
-| `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
-| `T25` | `S22` | Approve | `G22=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external side-effect mutation |
-| `T26` | `S22` | Approve | `G22=true`, `G23=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external side-effect mutation |
-
-**Cases and coverage**
-
-| Guard ID | Predicate | True/false behavior | Status |
-| --- | --- | --- | --- |
-| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means a non-owner operation is forbidden | Assumption |
-| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
-| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption |
-
-**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
-
-| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` persist pending approval | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
-| `T22` | `S22` | Approve | `G22=true` and `G23=true` | `A22` persist approval | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
-| `T23` | `S22` | Reject | `G22=true` | `A23` persist rejection reason | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
-| `T24` | `S24` | Reopen | `G21=true` | `A24` return to draft | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
-| `T25` | `S22` | Approve | `G22=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no approval audit or persistence mutation |
-| `T26` | `S22` | Approve | `G22=true`, `G23=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no approval audit or state change |
+| ID | Source | Event | Guards | Action/effect | Destination | Status | Constraint IDs | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` | `S22` | Valid | `C21` | HTTP 202; state `PendingApproval`; submission audit written |
+| `T22` | `S22` | Approve | `G22=true`, `G23=true` | `A22` | `S23` | Valid | `C22` | HTTP 200; state `Approved`; approval audit names actor |
+| `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | `C22` | HTTP 200; state `Rejected`; exact reason persisted |
+| `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | `C21` | HTTP 200; state `Draft`; reopen audit written |
+| `T25` | `S22` | Approve | `G22=false` | None | `S22` | Invalid/forbidden | `C22` | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external-side-effect mutation |
+| `T26` | `S22` | Approve | `G22=true`, `G23=false` | None | `S22` | Invalid/forbidden | `C22` | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external-side-effect mutation |
+| `T27` | `S24` | Reopen | `G21=false` | None | `S24` | Invalid/forbidden | `C21` | HTTP 403 `OWNER_REQUIRED`; rejection reason and all side effects unchanged |
 
 **Cases and coverage**
 
@@ -457,8 +401,8 @@ Coverage arithmetic:
 
 - Reachable states: `S21-S24`, `4/4 = 100%`.
 - Valid transitions: `T21-T24`, `4/4 = 100%`.
-- Selected guard outcomes: `G21=true` and `G22=true`/`false` and `G23=true`/`false`; six selected outcomes, `6/6 = 100%`.
-- Selected invalid/forbidden transitions: `T25,T26`, `2/2 = 100%`, separate from valid coverage.
+- Selected guard outcomes: `G21=true`, `G21=false`, `G22=true`, `G22=false`, `G23=true`, and `G23=false`, `6/6 = 100%`.
+- Selected invalid/forbidden transitions: `T25,T26,T27`, `3/3 = 100%`, separate from valid coverage.
 
 The role, authority, and self-approval rules are Assumptions. EP should partition owner/non-owner and authorized/unauthorized actors; BVA may apply to approval expiration if added; Decision Tables should cover combinations of `G21-G23` and any additional context. Role inheritance, delegated authority, simultaneous approvals, and audit retention are Residual risks unless specified.
 
@@ -466,37 +410,80 @@ The role, authority, and self-approval rules are Assumptions. EP should partitio
 
 **Requirement basis — Assumption.** One payment is submitted to an external provider. A success callback succeeds the payment. A failure or timeout can retry while the attempt count is below three. At attempt three, timeout expires the payment and failure reaches terminal failure. The exact callback and API behavior below is provisional.
 
-**Modeled object:** one `Payment` object. The provider, timer, queue, and retry worker are trigger sources, not additional modeled objects.
+**Model metadata:** model `PAYMENT-ST-1.1`; requirement `REQ-PAYMENT-LIFECYCLE-ASSUMED-1`; manual cases; UTC service clock; second precision; callback ordering and eventual consistency are `Question/TBD`.
 
-**Timing and ordering assumptions**
+**Event model**
 
-- UTC service clock, second precision.
-- Timeout boundary is elapsed time `>= 30 seconds` from entry to `Pending`.
-- Attempt count is `1` when entering `Pending`; `T34` increments it before the next pending attempt.
-- Maximum attempt count is `3`.
-- Duplicate callbacks are possible.
-- Callback ordering and eventual-consistency guarantees are **Question/TBD** unless confirmed by the provider contract.
+| Event ID | Source | Payload/applicability | Duplicate/order/retry behavior | Status |
+| --- | --- | --- | --- | --- |
+| `E31` | User | Payment ID, amount, currency, provider reference; applicable in `S31` | One submission for this model; duplicate submission is Residual risk | Assumption |
+| `E32` | External callback | Payment ID, attempt ID, success result; applicable in `S32` | Matching callback may arrive once; duplicate behavior is selected in `DUP31` | Assumption |
+| `E33` | External callback | Payment ID, attempt ID, failure reason; applicable in `S32` | Failure callback may trigger retry below attempt 3 | Assumption |
+| `E34` | Timer | Payment ID, attempt ID, elapsed time; applicable in `S32` | Timer competes with callbacks at the boundary | Assumption |
+| `E35` | Scheduled retry job | Payment ID, next attempt time; applicable in `S33` | Job is due only after retry delay; duplicate job is Residual risk | Assumption |
+
+**Guard model**
+
+| Guard ID | Predicate | True/false behavior | Status |
+| --- | --- | --- | --- |
+| `G31` | Payment data is complete and valid | True enables `T31`; false is outside this positive model | Assumption |
+| `G32` | Callback payment ID and attempt ID match the active attempt | True permits callback processing; false is `Question/TBD` | Assumption |
+| `G33` | `attempt < 3` | True enables retry; false selects terminal failure or expiration | Assumption |
+| `G34` | `elapsed >= 30s` | True enables timeout; false is not a valid timeout | Assumption |
+| `G35` | Retry job is due | True enables `T34`; false is `Question/TBD` | Assumption |
+
+**Action model**
+
+| Action ID | Operation/effect | Exact observable result | Status |
+| --- | --- | --- | --- |
+| `A31` | Create provider attempt | One provider request; state `Pending`; `attempt=1` | Assumption |
+| `A32` | Finalize success | State `Succeeded`; one capture and one success event | Assumption |
+| `A33` | Record callback failure and enqueue retry | State `Retrying`; failure persisted; no capture | Assumption |
+| `A34` | Increment attempt and submit | Attempt increments exactly once; one provider request; state `Pending` | Assumption |
+| `A35` | Record timeout and enqueue retry | State `Retrying`; timeout persisted; no capture | Assumption |
+| `A36` | Expire payment | State `Expired`; no capture; cancellation policy is `Question/TBD` | Assumption |
+| `A37` | Finalize terminal failure | State `Failed`; no retry and no capture | Assumption |
+
+**Constraints**
+
+| Constraint ID | Rule | Consequence | Status |
+| --- | --- | --- | --- |
+| `C31` | Payment data must be complete before submission | Invalid submission is outside this positive model | Assumption |
+| `C32` | Callback must match payment and active attempt | Mismatched callbacks must not finalize payment; response is `Question/TBD` | Assumption |
+| `C33` | Retry is allowed only when `attempt < 3` | No fourth attempt | Assumption |
+| `C34` | Retry job is processed only when due | Early-job behavior is `Question/TBD` | Assumption |
+| `C35` | Timeout requires elapsed time `>= 30s` | Before-boundary timeout is not valid | Assumption |
+| `C36` | Attempt 3 has no retry | Failure enters `S35`; timeout enters `S36` | Assumption |
 
 **States and transitions**
 
-| State ID | Meaning | Terminal/status |
-| --- | --- | --- |
-| `S31` | Created; amount and payment reference exist but provider submission has not started | Initial |
-| `S32` | Pending; a provider attempt is active, with `attempt` in `1..3` | Active |
-| `S33` | Retrying; a retry job is scheduled after failure or timeout | Recovery/intermediate |
-| `S34` | Succeeded; capture/result is finalized and immutable | Terminal |
-| `S35` | Failed; third attempt failed and no retry remains | Terminal |
-| `S36` | Expired; third attempt timed out and payment is no longer capturable | Terminal |
+| State ID | Meaning/invariant | Entry and outgoing behavior | Terminal/status |
+| --- | --- | --- | --- |
+| `S31` | Created; amount, currency, and payment reference exist; provider submission has not started | Initial; `T31` exits | Initial |
+| `S32` | Pending; one provider attempt is active; `attempt` is in `1..3` | `T31` or `T34` enters; `T32`, `T33`, `T35`, `T36`, or `T37` exits | Active |
+| `S33` | Retrying; a retry job is scheduled and no capture has occurred | `T33` or `T35` enters; `T34` exits; callbacks are `Question/TBD` | Recovery/intermediate |
+| `S34` | Succeeded; capture/result is finalized and immutable | `T32` enters; duplicate success is `DUP31` | Terminal |
+| `S35` | Failed; third attempt failed and no retry remains | `T37` enters; terminal events are `TERM35` | Terminal |
+| `S36` | Expired; third attempt timed out and payment is no longer capturable | `T36` enters; late callbacks are `STALE31` | Terminal |
 
-| Transition ID | Source | Event/source | Guard | Action | Destination | Exact oracle |
-| --- | --- | --- | --- | --- | --- | --- |
-| `T31` | `S31` | `E31 submit` / user | Valid payment data | `A31` create provider attempt | `S32` | HTTP 202; persisted `Pending`, `attempt=1`, one provider request |
-| `T32` | `S32` | `E32 success-callback` / provider | Callback matches payment and attempt | `A32` finalize success | `S34` | HTTP 200 acknowledgement; state `Succeeded`; one capture and one success event |
-| `T33` | `S32` | `E33 failure-callback` / provider | `attempt < 3` | `A33` record failure and enqueue retry | `S33` | HTTP 200 acknowledgement; state `Retrying`; failure recorded; no capture |
-| `T34` | `S33` | `E35 retry-job` / scheduler | Retry job is due | `A34` increment attempt and submit | `S32` | `attempt` increments exactly once; state `Pending`; one provider request |
-| `T35` | `S32` | `E34 timeout` / timer | `elapsed >= 30s` and `attempt < 3` | `A35` record timeout and enqueue retry | `S33` | Timeout record persisted; state `Retrying`; no capture |
-| `T36` | `S32` | `E34 timeout` / timer | `elapsed >= 30s` and `attempt = 3` | `A36` expire payment | `S36` | State `Expired`; no capture; provider cancellation policy is Question/TBD |
-| `T37` | `S32` | `E33 failure-callback` / provider | `attempt = 3` | `A37` finalize failure | `S35` | HTTP 200 acknowledgement; state `Failed`; no retry or capture |
+**Transition table** — positive transitions plus selected robustness cases; it is not exhaustive over every callback, timer, queue, payload, and terminal-state combination. The table is authoritative.
+
+| Transition ID | Source | Event/source | Guard | Action | Destination | Status | Constraint IDs | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `T31` | `S31` | `E31 submit` / user | `G31=true` | `A31` create provider attempt | `S32` | Valid | `C31` | HTTP 202; persisted `Pending`, `attempt=1`, one provider request |
+| `T32` | `S32` | `E32 success-callback` / provider | `G32=true` | `A32` finalize success | `S34` | Valid | `C32` | HTTP 200 acknowledgement; state `Succeeded`; one capture and one success event |
+| `T33` | `S32` | `E33 failure-callback` / provider | `G32=true`, `G33=true` | `A33` record failure and enqueue retry | `S33` | Valid | `C32,C33` | HTTP 200 acknowledgement; state `Retrying`; failure recorded; no capture |
+| `T34` | `S33` | `E35 retry-job` / scheduler | `G35=true` | `A34` increment attempt and submit | `S32` | Valid | `C34` | Attempt increments exactly once; state `Pending`; one provider request |
+| `T35` | `S32` | `E34 timeout` / timer | `G34=true`, `G33=true` | `A35` record timeout and enqueue retry | `S33` | Valid | `C33,C35` | Timeout record persisted; state `Retrying`; no capture |
+| `T36` | `S32` | `E34 timeout` / timer | `G34=true`, `G33=false` | `A36` expire payment | `S36` | Valid | `C35,C36` | State `Expired`; no capture; provider cancellation policy is `Question/TBD` |
+| `T37` | `S32` | `E33 failure-callback` / provider | `G32=true`, `G33=false` | `A37` finalize failure | `S35` | Valid | `C32,C36` | HTTP 200 acknowledgement; state `Failed`; no retry or capture |
+
+**Terminal and robustness behavior**
+
+- `TERM35`: a duplicate failure callback received in `S35` is an Assumption with HTTP 409 `PAYMENT_ALREADY_FAILED`; state, failure reason, audit, retry count, and capture count remain unchanged.
+- `DUP31`: a duplicate success callback received in `S34` is an Assumption with HTTP 200 `already_succeeded`; state, capture count, audit count, and external capture calls remain unchanged.
+- `STALE31`: a late success callback received in `S36` is an Assumption with HTTP 409 `PAYMENT_EXPIRED`; state and capture remain unchanged.
+- Callbacks in `S33`, mismatched callback IDs, early retry jobs, and pre-boundary timers are `Question/TBD`; do not classify them as invalid until the contract defines their exact oracle.
 
 **Robustness cases**
 
@@ -516,7 +503,7 @@ Coverage arithmetic:
 - Event IDs: `E31-E35`, `5/5 = 100%`.
 - Selected timeout/retry scenarios: first timeout, retry-to-success, and exhausted timeout, `3/3 = 100%`.
 - Selected duplicate/stale scenarios: `DUP31, STALE31`, `2/2 = 100%`.
-- Selected sequences: `Q31,Q32,Q33`, `3/3 = 100%`; longer `Q34` is additionally executed but not required by that denominator.
+- Selected sequences: `Q31,Q32,Q33,Q34`, `4/4 = 100%`.
 
 The exact duplicate, stale-callback, provider cancellation, callback ordering, queue delivery, and eventual-consistency behavior are Assumptions or Questions/TBD as marked. Concurrency between callback and timeout, replay protection, clock skew, backoff, provider retries, and network reliability are Residual risks requiring reliability, security, and concurrency testing.
 
@@ -524,14 +511,24 @@ The exact duplicate, stale-callback, provider cancellation, callback ordering, q
 
 **Requirement basis — Confirmed within this teaching model.** A document-like object can start editing, save repeatedly, and submit. The model intentionally demonstrates metric differences.
 
-States: `S41 Ready` (initial), `S42 Editing`, and `S43 Submitted` (terminal).
+**Model metadata:** model `METRIC-ST-1.0`; requirement `REQ-METRIC-DEMO-1`; manual metric sketches; fixtures may start from a defined state when explicitly stated.
 
-Transitions:
+| State ID | Meaning/invariant | Entry and outgoing behavior | Status |
+| --- | --- | --- | --- |
+| `S41` | `Ready` — object is editable but no edit session is active | Initial; `T41` enters `S42`; `T44` is forbidden | Confirmed |
+| `S42` | `Editing` — object is editable and save is available | `T41` enters; `T42` loops; `T43` exits | Confirmed |
+| `S43` | `Submitted` — submitted content is immutable | `T43` enters; terminal | Confirmed |
 
-- `T41`: `S41 -> S42`, start editing.
-- `T42`: `S42 -> S42`, save self-loop.
-- `T43`: `S42 -> S43`, submit.
-- `T44`: invalid submit from `S41`; selected negative case only.
+**Transition inventory** — reduced positive table plus one selected invalid case.
+
+| Transition ID | Source | Event/source | Guard | Action/effect | Destination | Status | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `T41` | `S41` | `E41 start-edit` / user | Editing permission | `A41` open edit session | `S42` | Valid | HTTP 200; state `S42`; one edit audit |
+| `T42` | `S42` | `E42 save` / user | Valid draft | `A42` persist draft | `S42` | Valid/self-loop | HTTP 200; state remains `S42`; draft version increments once |
+| `T43` | `S42` | `E43 submit` / user | Complete draft | `A43` finalize submission | `S43` | Valid | HTTP 202; state `S43`; one submission audit |
+| `T44` | `S41` | `E43 submit` / user | Editing required | None | `S41` | Invalid/forbidden | HTTP 409 `EDITING_REQUIRED`; no persistence, audit, notification, or submission invocation |
+
+**Actions/events:** `E41` starts editing and invokes `A41`; `E42` saves valid draft data and invokes `A42`; `E43` submits complete data and invokes `A43`. `C41` requires editing before submission. All are Confirmed within this teaching model.
 
 Selected pairs and sequence:
 
@@ -539,16 +536,24 @@ Selected pairs and sequence:
 - `P42 = (T42,T43)`.
 - `Q41 = (T41,T42,T43)`.
 
-Every sequence case records intermediate states and transition IDs, not only the final state.
+Every sequence case records intermediate states and transition IDs. `C4-B` uses a seeded fixture whose defined starting state is `S42`; it does not claim that `S42` is reachable without `T41`.
 
-| Suite | Cases and execution mapping | State coverage | Valid-transition coverage | Pair coverage | Sequence coverage |
+| Test ID | Case type | Setup and complete context | Steps | Exact oracle | Covered IDs |
 | --- | --- | --- | --- | --- | --- |
-| A | `C4-A`: execute `T41` then `T43`; states `S41->S42->S43` | `3/3 = 100%` | `2/3 = 66.7%`; `T42` missing | `0/2 = 0%` | `0/1 = 0%` |
-| B | Add isolated `C4-B`: start directly in `S42`, execute `T42`; all three states visited across suite | `3/3 = 100%` | `3/3 = 100%` | `0/2 = 0%`; no pair executed consecutively | `0/1 = 0%` |
-| C | Add `C4-C`: execute `T41->T42`; keep `T43` in an isolated case | `3/3 = 100%` | `3/3 = 100%` | `1/2 = 50%`; `P41` only | `0/1 = 0%`; `Q41` not complete |
-| D | Replace/add a complete `C4-D`: execute `T41->T42->T43`; intermediate states `S41->S42->S42->S43` | `3/3 = 100%` | `3/3 = 100%` | `2/2 = 100%` | `1/1 = 100%` |
+| `C4-A` | Separate transitions | Fresh `D-401` in initial `S41`; valid draft and editing permission | Execute `T41`; reset fixture; execute `T43` from seeded `S42` | `T41`: HTTP 200, `S42`, one audit. `T43`: HTTP 202, `S43`, one submission audit | `S41,S42,S43,T41,T43,E41,E43,A41,A43,REQ-METRIC-DEMO-1` |
+| `C4-B` | Isolated self-loop | Seed `D-402` in defined starting state `S42`; valid draft | Execute `T42` | HTTP 200; state remains `S42`; draft version increments exactly once; one save audit | `S42,T42,E42,A42,REQ-METRIC-DEMO-1` |
+| `C4-C` | Pair closure | Fresh `D-403` in `S41`; valid draft | Execute `T41`, then `T42`; execute `T43` separately | First path ends `S42` after one save; separate submit reaches `S43` | `T41,T42,T43,P41,REQ-METRIC-DEMO-1` |
+| `C4-D` | Complete sequence | Fresh `D-404` in `S41`; valid draft and permissions | Execute `T41`, `T42`, `T43` consecutively | States `S41->S42->S42->S43`; one edit audit, one save, one submission; final state immutable | `S41,S42,S43,T41,T42,T43,P41,P42,Q41,REQ-METRIC-DEMO-1` |
+| `C4-NEG` | Selected invalid transition | Fresh `D-405` in `S41`; no edit action performed | Attempt `T44` by submitting directly | HTTP 409 `EDITING_REQUIRED`; state remains `S41`; no persistence, audit, notification, or invocation | `S41,T44,E43,C41,REQ-METRIC-DEMO-1` |
 
-The invalid `T44` case is a separate selected-invalid metric: `1/1 = 100%`. It is not added to the three-item valid-transition denominator. Suite A proves that all states can be visited while `T42` is absent. Suite B proves that all valid transitions can be executed in separate cases while no selected pair is exercised. Suite C closes one pair; Suite D closes both pairs and the selected sequence. None of these metrics proves all values, guards, paths, branches, requirements, or non-functional behavior.
+| Suite | Included cases and execution mapping | State coverage | Valid-transition coverage | Pair coverage | Sequence coverage |
+| --- | --- | --- | --- | --- | --- |
+| A | `C4-A`: `T41` and `T43` in separate fixtures | `3/3 = 100%` | `2/3 = 66.7%`; `T42` missing | `0/2 = 0%` | `0/1 = 0%` |
+| B | Add isolated `C4-B` from seeded `S42` | `3/3 = 100%` | `3/3 = 100%` | `0/2 = 0%`; no pair is consecutive | `0/1 = 0%` |
+| C | Add `C4-C`: execute `T41->T42`; keep `T43` isolated | `3/3 = 100%` | `3/3 = 100%` | `1/2 = 50%`; `P41` only | `0/1 = 0%`; `Q41` incomplete |
+| D | Use complete `C4-D`: execute `T41->T42->T43` | `3/3 = 100%` | `3/3 = 100%` | `2/2 = 100%` | `1/1 = 100%` |
+
+The invalid `T44` case is separate: `1/1 = 100%`; it is not part of the three-item valid denominator. None of these metrics proves all values, guards, paths, branches, requirements, or non-functional behavior.
 
 ## When to use State-Transition Testing
 

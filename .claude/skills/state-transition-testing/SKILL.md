@@ -202,7 +202,7 @@ Use stable IDs and keep the transition table authoritative when a diagram is una
 
 | Element ID | Type | Meaning/source or formal predicate | Applicable states/context | True/false or expected influence/oracle | Payload/dependencies/timing | Requirement reference | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `EVENT-1` | Event / Guard / Action |  |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
+| `EVENT-1` | Event / Guard / Action |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
 
 ### Transition inventory
 
