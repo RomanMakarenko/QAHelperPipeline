@@ -1,369 +1,694 @@
+# State-Transition Testing
+
+## Scope, modeled object, requirement basis, and exact oracle
+
+State-Transition Testing is a black-box, specification-based technique for checking how one modeled object or bounded process changes in response to events. It is useful when behavior depends on the current state, event history, role, time, retry count, or event ordering.
+
+Start every design by recording:
+
+| Field | What to record |
+| --- | --- |
+| Modeled object or lifecycle | One order, ticket, payment, document, session, job, or explicitly bounded process |
+| Scope boundary | Included states, events, actors, data, time range, and excluded behavior |
+| Requirement basis | Requirement, acceptance criterion, contract, approved diagram, or `Question/TBD` |
+| Initial condition | How the object is created and the exact initial state |
+| Exact oracle | Response code/message, accepted or rejected event, persisted state, emitted event, notification, calculation, audit record, invocation, and side effects |
+| Priority | Risk or business priority for each transition or scenario |
+| Model status | Confirmed, Assumption, Question/TBD, or Residual risk |
+
+A diagram node or arrow is a model element, not automatically an executable test case. An executable case also needs setup, complete input and context, event steps, guard evidence, expected action/effect, exact oracle, expected destination state, side-effect expectations, priority, and traceability.
+
+## Clarifications, assumptions, questions, and residual risks
+
+Use these labels consistently:
+
+- **Confirmed** — stated directly in a requirement, contract, approved model, or established domain rule.
+- **Assumption** — introduced to make a teaching example or provisional model executable; it must be confirmed before production use.
+- **Question/TBD** — behavior that is not specified and may change the model or oracle. Ask about it when it blocks safe modeling.
+- **Residual risk** — meaningful behavior outside the selected scope or coverage, even when the current model is internally consistent.
 
-State & Transition Diagram — что это и как применять
-9 мин
-186K
-Тестирование IT-систем
-*
-Тестирование веб-сервисов
-*
-Подготовка технической документации
-*
-State & Transition Diagram (сокращенно S&T) — схема состояний и переходов. Техника для визуализации ТЗ. Она наглядно показывает, как некий объект переходит из одного состояния в другое.
+Ask only questions that block safe modeling or make the expected oracle unknowable. Typical blocking questions concern the modeled object, state boundary, initial state, terminal behavior, event source, guard, destination state, timing, retry limit, ordering, persistence, or exact rejection behavior.
 
-Вот объект находился в состоянии А, потом произошло какое-то действие, и он попал в состояние В. Потом он попадет в состояние С и другие... Принцип не меняется, было одно состояние, стало другое.
+Never silently classify missing behavior as invalid or impossible. For example, if a callback after expiration is not specified, record `Question/TBD`; do not assume that it is rejected. An example may use a provisional rule, but it must label the rule as an Assumption.
 
+## What State-Transition Testing is and ISTQB alignment
 
-Мы рисуем:
+State-Transition Testing represents the behavior of an object or system as states and transitions caused by events or triggers. Tests exercise state entry and invariants, valid and invalid transitions, guards, actions, event sequences, and observable outcomes. This is consistent with the ISTQB use of state-transition models as specification-based test-design models; this guide is a practical project supplement, not a replacement for the current official syllabus, product requirements, or domain constraints.
 
-кружочки — состояния объекта;
+The names describe different artifacts:
 
-стрелочки — то, благодаря чему из состояния А в состояние В. Это действие, но его может совершить не только пользователь, но и система сама. Например, задача запустилась автоматически в 10 часов вечера.
+- **State & Transition Diagram** — a visual modeling artifact with state nodes and labeled directed transitions.
+- **State-Transition Model** — the complete set of states, events, guards, actions, constraints, and transition rules. It may be represented by a diagram, table, or plain text.
+- **State-Transition Testing** — the test-design technique that derives and executes tests from that model.
 
-Такая схема позволяет нам сразу визуально оценить, какие переходы вообще возможны и что надо протестировать. Ведь нам надо протестировать и эту стрелку, и эту... Так что стрелочки — это наши готовые тест-кейсы!
+The model helps reveal missing paths, forbidden events, terminal-state mistakes, retry defects, and ordering problems. It does not prove every data value, implementation branch, event sequence, concurrency interleaving, requirement, or non-functional property.
 
-Схема состояний и переходов относится к техникам тест-дизайна. Значит, про неё спрашивают на собеседованиях. И поэтому я сделаю небольшой цикл статей по таким техникам в помощь начинающим тестировщикам. Чтобы ознакомиться с каждой техникой:
+## Terminology and notation
 
-Вариант использования
+| Term | Practical meaning |
+| --- | --- |
+| Modeled object/system | The single domain entity or bounded lifecycle being modeled, such as an order, ticket, payment, session, job, document, or account process |
+| State | A condition in which a defined set of events/actions is available or unavailable and specified behavior remains stable |
+| State invariant | A property that must hold while the object is in a state |
+| Initial state | The starting state for the declared test scope |
+| Final/terminal state | A lifecycle-complete state from which no further in-scope transition is expected |
+| Error/recovery state | A defined failed, rejected, suspended, or recoverable condition |
+| Event/trigger | A user action, system action, timer, scheduled job, callback, external message, data change, or other occurrence that may cause a transition |
+| Guard/condition | A predicate that must be true for a transition to be enabled |
+| Transition | A directed relation from a source state to a destination state caused by an event and enabled, when applicable, by a guard |
+| Action/effect | An observable operation during a transition, such as persistence, calculation, notification, external invocation, or audit logging |
+| Self-transition/loop | A transition whose source and destination are the same state |
+| Valid transition | A transition permitted under its preconditions and satisfied guards |
+| Invalid transition | An attempted event or transition that is not allowed or fails its guard and has specified rejection, no-op, error, or recovery behavior |
+| Forbidden event | An externally possible event that is prohibited in the current state or context |
+| Impossible/unreachable element | A state or transition that cannot be reached from the initial state under stated constraints; it requires an exclusion rationale |
+| Unknown behavior | Behavior that is not safe to classify as valid, invalid, forbidden, or impossible |
+| State-transition table | A tabular source of truth for source state, event, guard, action, destination, status, and oracle |
+| State diagram | A graphical representation of state nodes and directed, labeled transitions |
+| Transition sequence | An ordered list of events and resulting transitions |
+| Transition pair/switch | Two transitions executed consecutively where the first destination is the second source |
+| Path | A selected route through states and transitions from an initial or defined starting state |
+| Dead end | A non-terminal state with no permitted outgoing transition when the model expects one |
+| Test oracle | The exact observable result used to determine pass or fail |
+| Constraint/dependency | A rule that limits legal states, events, guards, combinations, ordering, timing, retries, or composition; assign a stable Constraint ID when it affects feasibility or reachability |
+| State coverage | Coverage of required reachable State IDs |
+| Valid-transition coverage | Coverage of required valid Transition IDs |
+| Event/trigger coverage | Coverage of modeled required Event IDs or trigger sources |
+| Guard/condition coverage | Coverage of selected true/false guard outcomes or branches |
+| Invalid-transition coverage | Coverage of selected prohibited events or failed guards, reported separately from valid transitions |
+| Transition-pair/sequence coverage | Coverage of selected consecutive transition pairs or sequences |
+| Path coverage | Coverage of explicitly selected paths, not an implicit claim to cover every possible path |
 
-Decision Table (таблицы решений)
+Recommended label notation is:
 
-State & Transition Diagram (схема состояний и переходов) — текущая статья
+```text
+T-001: submit | [valid data] | persist order | Draft -> Submitted
+```
 
-Другие диаграммы, схемы, картинки (бонус такой к техникам)
+For a self-loop, show the same source and destination. For an invalid event, show the expected state after the attempt, not only “not allowed.”
 
-Сегодня поговорим про State & Transition Diagram:
+## Core modeling principles
 
-Как рисовать диаграмму
+1. **Select one object or bounded lifecycle.** Model an order, not simultaneously the order, payment, customer, cart, and web page. If several objects interact, model them separately and document the interaction or use explicit composition.
+2. **Define states by behavior and invariants.** A state changes the available operations, restrictions, processing behavior, data guarantees, or observable outcomes.
+3. **Make ordinary states mutually exclusive.** An object has one ordinary state at a time. Concurrent dimensions require explicit orthogonal or composite modeling.
+4. **Cover the relevant domain.** States should be collectively exhaustive for the declared boundary, or the unmodeled region must be visible as a gap, Question/TBD, or Residual risk.
+5. **Do not model every screen or incidental action.** A page, URL, button, or unchanged form value is not a state unless it represents different domain behavior. A GUI can help reach or observe a state.
+6. **Merge equivalent states.** Merge states with identical relevant actions, restrictions, invariants, transitions, and oracles unless a requirement distinguishes them.
+7. **Label every transition.** Include an event, optional guard and action, source, destination, actor or trigger source, and stable ID.
+8. **Include meaningful trigger sources.** Consider user, system, timer, scheduled job, external service, callback, and data-driven triggers.
+9. **Separate no-op, rejection, error, and recovery.** They may have different response, persistence, notification, audit, and destination-state oracles.
+10. **Model state-dependent events.** The same event may be valid in one state, invalid in another, or guarded by role, data, time, or account context.
+11. **Include lifecycle edges.** Model initial, terminal, error, retry, timeout, reset, reopen, cancel, resume, and recovery behavior when in scope.
+12. **Keep diagrams reviewable.** Split dense diagrams into linked submodels without removing important high-risk transitions.
+13. **Do not invent implementation detail.** Browser closure, a server crash, or a database column is not a modeled event unless the requirement makes it observable and relevant.
 
-Примеры S&T
+## State, event, guard, action, and dependency model
 
-Типовые ошибки при составлении карты
+### State model
 
-Вместо объекта — GUI
+For every state record its ID, meaning, entry criteria, invariant, allowed and forbidden actions, persistence expectations, outgoing transitions, terminal/dead-end status, relevant context, requirement reference, and status label. Useful state questions are:
 
-Несколько объектов в одной карте
+- What must be true on entry and while the object remains here?
+- Which events are accepted, rejected, ignored, or routed to recovery?
+- What response, persisted data, notification, audit record, or external call proves the behavior?
+- Can the object leave, return, expire, or remain indefinitely?
 
-Несколько одинаковых состояний
+A state is not merely “the form is open.” It may be “Draft” if the object can be edited and has not been submitted; opening several different screens does not create separate states when the object behavior is unchanged.
 
-Плюсы подхода
+### Event and trigger model
 
-Минусы подхода
+For every event record an ID, source, payload or representation, applicable states, forbidden states, duplicate/idempotency behavior, ordering assumptions, retry semantics, and status. Source values include `user`, `system`, `timer`, `scheduled`, `external`, `callback`, and `data-driven`.
 
-Инструменты для рисования
+### Guard model
 
-Итого
+For every guard record an ID, formal predicate, dependencies, true and false behavior, role/data/time/context boundaries, and whether a failed guard rejects, no-ops, retries, or enters recovery. Use a separate guard ID when outcomes are materially different. A failed guard needs an exact oracle such as HTTP 403 with a stable error code and no state or audit mutation.
 
+### Action/effect model
 
+For every action record an ID, operation or calculation, exact output and precision, persistence, notification, external invocation, audit record, state change, dependencies, mutual exclusions, and status. Empty or absent effects must have a defined meaning such as “no persistence and no notification.”
 
-Как рисовать диаграмму
-Очень важно: S&T рисуется на объект! Один объект. В идеале — на объект, имеющий аналог в базе данных продукта.
+### Transition model
 
-Шаг 1. Вы выбираете объект в своём проекте (рабочем или учебном, не суть).
+A transition record must include:
 
-Шаг 2. Думаете, какие у него состояния. Они не должны пересекаться, то есть: объект не может быть разом в двух состояниях, и при этом он всегда хоть в каком-то одном есть
+- stable Transition ID;
+- source and destination State IDs;
+- Event/Trigger ID;
+- Guard ID or explicit unguarded status;
+- actor/source and preconditions;
+- Action/Effect ID and exact oracle;
+- valid, invalid, forbidden, impossible, or Question/TBD classification;
+- loop, retry, timeout, terminal, or recovery attributes;
+- requirement reference and status.
 
-Шаг 3. Рисуете эти состояния кружочками.
+Use EP for behaviorally distinct state, role, payload, and context classes; BVA for timeout, expiration, retry-count, and other thresholds; Decision Tables for combinations of guards; and Pairwise for mostly independent environment or parameter dimensions.
 
-Шаг 4. Соединяете их стрелочками. Стрелочки - это действия, их надо подписать.
+## Valid, invalid, forbidden, impossible, unreachable, and unknown behavior
 
-Шаг 5. Смотрите, что получилось и анализируете, есть ли у объекта другие состояния? А другие действия между текущими состояниями? Переход на шаг 2.
+- **Valid/legal:** executable from a reachable state with satisfied preconditions and guards.
+- **Invalid:** can be attempted from a reachable state but is not permitted or fails a guard; it needs a defined response, state, and side-effect oracle.
+- **Forbidden:** an externally possible event or payload prohibited by a state or contract. It may be a selected negative test, separate from positive coverage.
+- **Impossible/unreachable:** cannot occur under the declared initial state and constraints. Document why and exclude it from valid executable denominators.
+- **Unknown:** not specified well enough to classify. Mark Question/TBD and ask for clarification when it blocks a safe test.
 
-Кто не будет выполнять эту последовательность шагов, очень рискует вместо S&T нарисовать схему вышивки крестиком)))
+An invalid case must identify the reachable source state, complete event/context, violated state rule or guard ID, exact response/status/message or no-op, expected state after the attempt, and persistence/notification/audit expectations. Report invalid-transition coverage separately from valid-transition coverage.
 
+Explicitly consider duplicate submissions, repeated events, stale callbacks, out-of-order messages, retry after success, retry after failure, and events received in terminal states whenever those risks are relevant. Do not assume that all such events are harmless or idempotent.
 
-Чтобы начать, задайте себе вопросы:
+## Timing, asynchronous behavior, retries, ordering, concurrency, and composition
 
-Какой конкретно объект вы выбрали? Как он называется? (только один!)
+Record the clock source, time zone, reference time, unit, precision, boundary rule, scheduler behavior, and eventual-consistency expectation for timing rules. For example, “expires at elapsed >= 30 seconds using the UTC service clock at second precision” is repeatable; “expires after a while” is not.
 
-Какие у этого объекта есть состояния?
+For asynchronous behavior, model callbacks, queues, polling, delayed jobs, and timer events as trigger sources. Define whether an event is accepted once, idempotent, ignored, rejected, or sent to recovery. Define which persisted state and response are observable before and after eventual completion.
 
-Основное определение состояния — "набор доступных и недоступных действий с объектом". Продукт всегда должен знать, в каком состоянии каждый его объект. Вообще, когда будете думать об объектах и состояниях, старайтесь представлять их аппаратную реализацию.
+For retries, record the attempt number at each state, maximum attempts, backoff, retry trigger, increment action, and terminal behavior. Use BVA around attempt limits and timeout boundaries. Test success on the first attempt, success after retry, exhausted retries, and duplicate or late provider events.
 
-Объект — это практически всегда строка в базе данных, старайтесь абстрагироваться от интерфейса вообще, и представляйте те действия, которые вы могли бы делать с объектом прямыми запросами в базу.
+For ordering and concurrency, record whether events can arrive concurrently, whether ordering is guaranteed, and how locks, optimistic versions, or conflicts are observed. If this is unspecified, use Question/TBD or a clearly labeled Assumption. Do not flatten independent dimensions into a false mutually exclusive state. Use separate linked state machines or explicit orthogonal/composite regions and declare which combinations are legal.
 
-Вот пример хорошей диаграммы:
+## Diagram and transition-table representations
 
+A diagram should contain stable state IDs, a marked initial state, terminal markers, labeled directed transitions, and a legend. A table must remain authoritative if rendering fails or the diagram is dense. State whether the table is:
 
+- **Exhaustive** for the declared state/event domain;
+- **Reduced** with a documented equivalence or expansion rationale;
+- **Positive-only** with invalid behavior recorded elsewhere; or
+- **Augmented-invalid** with selected invalid or forbidden attempts.
 
+Example plain-text diagram:
 
-State Transition на примере тортика!
+```text
+[*] -> S1 Draft
+S1 -- T1 submit / A1 persist --> S2 Submitted
+S2 -- T2 start / A2 enqueue --> S3 InProgress
+S3 -- T3 complete / A3 finalize --> S4 Completed
+S3 -- T6 failure / A6 record error --> S6 Failed
+S6 -- T7 retry / A7 increment attempt --> S3
+S4 --> [*]
+```
 
-В чатике моей школы для тестировщиков был очень интересный диалог по поводу рисования State Transition. Студентка рисует его для просмотра сериала и пытается разобраться, как это сделать:
+The table must preserve semantics that a diagram may hide: guards, payloads, timing, exact responses, side effects, exclusions, and case IDs. Every transition source and destination must exist in the state model.
 
-— В ДЗ получила фидбэк, что сделала не схему состояний и переходов, а некую инструкцию по просмотру сериала, по факту показывающую одно его состояние — в процессе просмотра. Но суть как раз в том, что сериал из непросмотренного может быть перемещен в другие состояния, отраженные в виде разделов в личном кабинете, с помощью четырех кнопок, которые на схеме являются действиями. Больше никаких действий с сериалом пользователю не доступно (загрузка, редактирование и т.д.)
+## Repeatable State-Transition workflow
 
-— Ну смотрите, Вы продолжаете описывать и смотреть на вещи, как пользователь, а надо как тестировщик. Сериалы из пустоты не берутся. Кто-то их закачивает. Значит, все же связка "сериала не существует" и "сериал загружен на сайт" — уже есть)
+1. **Define scope and oracle.** Identify operation, modeled object, lifecycle boundary, requirements, preconditions, and exact observable outcomes.
+2. **Choose one object or bounded process.** Reject GUI-only or mixed-object scope unless composition is explicit.
+3. **Identify states.** Extract initial, active, intermediate, terminal, error, recovery, and dead-end states from behavior and restrictions.
+4. **Check state semantics.** Make states non-overlapping and behaviorally distinct; merge equivalent states and record gaps.
+5. **Identify events and sources.** List user, system, timer, external, callback, scheduled, and data-driven triggers.
+6. **Identify guards and context.** Formalize role, account, data, time, state, environment, dependency, and boundary conditions.
+7. **Identify actions and oracles.** Record response, persistence, calculation, notification, invocation, audit, processing path, and state change.
+8. **Build the diagram and inventory.** Assign stable State, Event, Guard, Action, Constraint, and Transition IDs.
+9. **Classify feasibility.** Mark valid, invalid, forbidden, impossible/unreachable, or Question/TBD and record rationales.
+10. **Check completeness.** Review every reachable state for relevant valid and invalid events, loops, terminal behavior, timeouts, retries, and recovery.
+11. **Check consistency.** Find duplicate states, missing IDs, ambiguous destinations, overlapping transitions, nondeterminism, dead ends, missing guards, and mismatched oracles.
+12. **Select coverage objectives.** Choose state, transition, event, guard, invalid, terminal, invariant, pair, sequence, path, timing, retry, or concurrency metrics and define denominators.
+13. **Derive executable cases.** Add setup, complete context, source state, event, guard evidence, action, exact oracle, destination, priority, and traceability.
+14. **Test exceptional behavior.** Exercise selected failed guards, forbidden events, duplicate/stale/out-of-order events, retries, timeouts, terminal events, and recovery.
+15. **Execute against the oracle.** Verify source, accepted/rejected event, action, state, response, persistence, notification, audit, and side effects.
+16. **Calculate coverage independently.** Recalculate deduplicated IDs rather than trusting a generator or visual report.
+17. **Report gaps and risks.** List uncovered items, exclusions, assumptions, Questions/TBD, and residual timing/concurrency/non-functional risk.
+18. **Revise from evidence.** Split supposedly equivalent states or transitions when actual behavior differs; document the defect and update the model.
 
-— Да, конечно, есть, но выполнять ее может очень ограниченный круг лиц, и я в процессе тестирования не могу. (студенты выбирают любой общедоступный проект и тестируют его. Разумеется, доступа в админку у них нет)
+## Coverage definitions and reporting
 
-— По-хорошему у тестировщиков на это есть права) и им дают необходимый доступ.
+Define a finite, stable denominator before execution. Use deduplicated IDs and report excluded impossible/unreachable elements separately.
 
-— То есть важны состояния только по отношению к сайту, а что там с этим сериалом происходит в аккаунте уже считается как одно — просмотр? Тестировщик я без году неделя, а пользователь — много лет :) Поэтому и прошу постановки мозгов.
+| Metric | Formula and interpretation |
+| --- | --- |
+| Reachable-state coverage | visited required reachable State IDs / total required reachable State IDs × 100% |
+| Valid-transition coverage | exercised required valid Transition IDs / total required valid Transition IDs × 100% |
+| Event/trigger coverage | exercised required Event IDs / total modeled required Event IDs × 100%; separate trigger sources when useful |
+| Guard outcome coverage | exercised required true/false outcomes or branches / total required guard outcomes or branches × 100%, only when selected |
+| Selected invalid coverage | exercised selected invalid/forbidden attempts / selected invalid/forbidden attempts × 100%, separate from valid coverage |
+| Terminal-state coverage | visited required terminal State IDs / total required terminal State IDs × 100% |
+| State-invariant coverage | exercised declared state invariants / total selected state invariants × 100% |
+| Transition-pair coverage | exercised selected consecutive Transition-ID pairs / total selected pairs × 100% |
+| Sequence/path coverage | executed selected sequence/path IDs / total selected sequence/path IDs × 100%; not all mathematical paths by implication |
+| Timing/retry/concurrency coverage | exercised selected timeout, boundary, retry, duplicate, ordering, or interleaving scenarios / selected scenarios × 100% |
 
-Тут моя коллега решила объяснить рисование карты на примере... Тортика! Дальнейший диалог был просто потрясающий, не могу не поделиться им с вами (разумеется, с разрешения коллеги, все же это ее идея, а не моя). Итак, приступаем:
+Distinguish visiting a state from verifying all behavior in it; exercising a transition from covering every guard/data/role path that enables it; one event from that event in every relevant state; a pair from a longer sequence; representing a path from executing it; and valid coverage from invalid coverage.
 
-— Вот смотрите... Торт любите? Или другую еду какую-нибудь)
+Do not count impossible or unreachable elements as uncovered valid behavior. List each exclusion and its rationale. If one transition has materially different guards or outcomes, split it into separate Transition or Guard IDs.
 
-— Допустим)
+Record model version, requirement version, manual or generated method, tool/version, environment, clock configuration, event-order setting, selected scope, excluded elements, case count, and execution result. A passing suite with 100% declared state or transition coverage does not prove all values, all event sequences, all paths, all guards, all implementation branches, all concurrent interleavings, all requirements, or any non-functional property.
 
-— Отлично.
+## Required worked examples
 
-Чтобы приготовить торт, нам нужны ингредиенты, правильно? Это то, из чего он состоит. Как и наши объекты из параметров, но только в граммах.
+### Example 1: Order lifecycle
 
-Торт «не существует»
-Торт «не существует»
-Так вот, от того, что какого-то ингредиента будет больше/меньше, состояние торта не изменится. Он будет по-прежнему "не существует".
+**Requirement basis — Assumption.** An order can be submitted, started by the processing service, completed, cancelled before completion, or recoverably failed and retried. The exact API contracts below are teaching assumptions, not product facts.
 
-Чтобы его состояние изменилось — надо начать что-то с ними делать. Например, смешать, залить в форму и отправить в духовку. Тогда состояние будет "В процессе готовки".
+**Modeled object:** one `Order` object. A web page, customer, inventory item, and payment are outside this model.
 
-«В процессе готовки»
-«В процессе готовки»
-Потом, когда бисквит испечется, мажем его кремом и украшаем. Он становится у нас "Торт украшен".
+**States and invariants**
 
-Но сразу есть его нельзя, мы ставим в холодильник, чтобы украшение застыло, а только потом мы можем его есть. После холодильника состояние становится "Торт готов". А вот дальше — разнообразие)
+| State ID | Meaning and invariant | Entry/exit notes | Status |
+| --- | --- | --- | --- |
+| `S1` | `Draft` — editable order data is valid enough to submit; not yet submitted | Initial; `T1` exits | Assumption |
+| `S2` | `Submitted` — order is immutable to the customer and awaits processing | `T1` enters; `T2` or `T4` exits | Assumption |
+| `S3` | `InProgress` — processing has started and a worker owns the attempt | `T2` or `T7` enters; `T3`, `T5`, or `T6` exits | Assumption |
+| `S4` | `Completed` — fulfillment result is finalized and immutable | Terminal; `T3` enters | Assumption |
+| `S5` | `Cancelled` — cancellation is recorded and no processing may start | Terminal; `T4` or `T5` enters | Assumption |
+| `S6` | `Failed` — processing failed with a recorded reason and retry is available | Recovery; `T6` enters and `T7` exits | Assumption |
 
-Мы можем съесть торт, тогда он станет "Торт съеден".
+**Events and actions**
 
-«Торт съеден»
-«Торт съеден»
-Возможно, мы уедем и не съедим торт, пока его можно есть. Тогда он станет "Торт испорчен".
+| ID | Type/source | Meaning | Action/oracle | Status |
+| --- | --- | --- | --- | --- |
+| `E1` | User | Submit complete valid order | `A1` persists `status=Submitted` and returns HTTP 202 | Assumption |
+| `E2` | System | Start processing | `A2` records a processing attempt and destination `InProgress` | Assumption |
+| `E3` | System | Processing completes | `A3` persists final result and returns internal success | Assumption |
+| `E4` | User | Cancel | `A4` persists cancellation and returns HTTP 200 | Assumption |
+| `E5` | System | Processing failure | `A5` records error reason and makes retry available | Assumption |
+| `E6` | User or system | Retry failed order | `A6` increments retry metadata and starts processing | Assumption |
 
-Кстати, в процессе приготовления могли быть и другие ответвления. Например:
+**Guards**
 
-— передержали бы бисквит, состояние изменилось бы на "Торт испорчен";
+| Guard ID | Predicate | True/false behavior | Status |
+| --- | --- | --- | --- |
+| `G1` | Order data is valid enough to submit | True enables `T1`; false is outside this positive-only example | Assumption |
+| `G2` | Worker accepts the submitted order | True enables `T2`; false behavior is Question/TBD | Assumption |
+| `G3` | Processing succeeds | True enables `T3`; false enables `T6` | Assumption |
+| `G4` | Cancellation is allowed before completion | True enables `T4` or `T5`; false behavior is Question/TBD | Assumption |
+| `G5` | Processing failure is detected | True enables `T6`; false means no failure transition | Assumption |
+| `G6` | Retry is available | True enables `T7`; false behavior is Question/TBD | Assumption |
 
-— не стали бы украшать бисквит и корж испортился бы → "Торт испорчен";
+**Transition inventory and authoritative table** — positive-only table; selected invalid attempts follow it.
 
-«Торт испорчен»
-«Торт испорчен»
-— Ну тут-то я, получается, покупаю готовый торт. И уже размышляю, что с ним делать.
+| Transition ID | Source | Event | Guard/precondition | Action | Destination | Status | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `T1` | `S1` | `E1 submit` | `G1` valid order data | `A1` persist submission | `S2` | Valid | HTTP 202; persisted state is `Submitted`; one submission audit record |
+| `T2` | `S2` | `E2 start` | `G2` worker accepts order | `A2` record attempt | `S3` | Valid | Worker acknowledgement; persisted state is `InProgress`; processing event emitted once |
+| `T3` | `S3` | `E3 complete` | `G3` processing succeeds | `A3` finalize result | `S4` | Valid | Final result persisted; state is `Completed`; completion notification emitted once |
+| `T4` | `S2` | `E4 cancel` | `G4` cancellation allowed before completion | `A4` record cancellation | `S5` | Valid | HTTP 200; state is `Cancelled`; no processing job emitted |
+| `T5` | `S3` | `E4 cancel` | `G4` cancellation allowed before completion | `A4` record cancellation | `S5` | Valid | HTTP 200; state is `Cancelled`; no completion action afterward |
+| `T6` | `S3` | `E5 failure` | `G5` processing failure is detected | `A5` record reason | `S6` | Valid | Error reason persisted; state is `Failed`; retry event available |
+| `T7` | `S6` | `E6 retry` | `G6` retry is available | `A6` increment and restart | `S3` | Valid | Retry count increments exactly once; state is `InProgress`; one processing attempt emitted | 
 
-— Ок, изначально торта у Вас не было. Потом у Вас появилось состояние "Торт куплен". А дальше то, что происходит после "Торт готов" ¯\_(ツ)_/¯
+Model exclusions and negative behavior:
 
-Торт может быть съеден, может стать испорченным, может быть подарен, а только потом его уже съедят/не съедят, может быть выброшен. Все зависит от системы.
+- `T-IMP-1`: direct `S1 Draft -> S4 Completed` is impossible under this requirement because completion requires `S2 -> S3`; it is excluded from the valid denominator, not reported as an uncovered valid transition.
+- `T-TERM-1A`: cancellation received in `S4 Completed` is a terminal-state event. **Assumption:** HTTP 409 with code `ORDER_ALREADY_COMPLETED`, unchanged state, no result overwrite, no duplicate notification.
+- `T-TERM-1B`: completion received in `S4 Completed` is a terminal-state event. **Assumption:** HTTP 409 with code `ORDER_ALREADY_COMPLETED`, unchanged state, no result overwrite, no duplicate notification.
+- `T-INV-1`: completion from `S1 Draft` is an invalid attempt. **Assumption:** HTTP 409 with code `ORDER_NOT_IN_PROGRESS`, unchanged state, no completion audit or persistence.
 
-— То есть, я правильно понимаю?
+**Constraint model**
 
-1.  Купила
+| Constraint ID | Rule | Affected elements | Consequence | Status |
+| --- | --- | --- | --- | --- |
+| `C1` | Completion requires the order to be in `S3 InProgress` | `T3`, `T-INV-1`, `S1`, `S3` | Direct `S1 -> S4` completion is impossible; completion from `S1` is invalid | Assumption |
+| `C2` | Cancellation is allowed in `S2` and `S3` but not after completion | `T4`, `T5`, `T-TERM-1A` | Cancellation from `S4` is a selected terminal-state negative case | Assumption |
 
-2.  Поставила в холодильник на потом
+**Diagram**
 
-3.  Передумала, достала, надкусала
+```text
+[*] -> S1 Draft
+S1 -- T1/E1 submit --> S2 Submitted
+S2 -- T2/E2 start --> S3 InProgress
+S2 -- T4/E4 cancel --> S5 Cancelled
+S3 -- T3/E3 complete --> S4 Completed
+S3 -- T5/E4 cancel --> S5 Cancelled
+S3 -- T6/E5 failure --> S6 Failed
+S6 -- T7/E6 retry --> S3 InProgress
+S4, S5 are terminal
+```
 
-4.  Снова передумала, решила съесть целиком, осилила половину
+**Executable cases**
 
-5.  Расстроилась и решила не доедать вообще и выкинуть
+| Test ID | Transition/sequence | Setup and complete data | Steps | Exact oracle and destination | Traceability |
+| --- | --- | --- | --- | --- | --- |
+| `ST1-01` | `Q1=(T1,T2,T3)` | Create order `O-101` with valid SKU, quantity, address, and payment reference; state `S1` | Submit; dispatch start; return successful processing | HTTP 202 on submit; states `S1 -> S2 -> S3 -> S4`; result and one completion notification persisted | `REQ-ORDER-LIFECYCLE`, `S1-S4`, `E1-E3`, `A1-A3` |
+| `ST1-02` | `T4` | Create valid `O-102` in `S2`; no worker start | Cancel order | HTTP 200; state `S5`; no processing event | `REQ-ORDER-LIFECYCLE`, `S2,S5`, `E4`, `A4` |
+| `ST1-02B` | `T5` | Create valid `O-102B` in `S3`; worker cancellation is enabled | Cancel order | HTTP 200; state `S5`; cancellation is persisted; no completion action afterward | `REQ-ORDER-LIFECYCLE`, `S3,S5`, `T5`, `E4`, `A4` |
+| `ST1-03` | `Q2=(T2,T6,T7,T3)` | Create submitted `O-103`; inject one processing failure | Start; inject failure; retry; complete | States `S2 -> S3 -> S6 -> S3 -> S4`; failure reason, retry count, result, and one completion notification are exact | `REQ-ORDER-LIFECYCLE`, `T2,T6,T7,T3` |                      
+| `ST1-04A` | `T-TERM-1A` | Create completed `O-104A` with result and notification already recorded | Send cancel request | HTTP 409 `ORDER_ALREADY_COMPLETED`; state, result, audit, and notification count unchanged | `T-TERM-1A`, `S4`, `E4` |
+| `ST1-04B` | `T-TERM-1B` | Create completed `O-104B` with result and notification already recorded | Send completion event | HTTP 409 `ORDER_ALREADY_COMPLETED`; state, result, audit, and notification count unchanged | `T-TERM-1B`, `S4`, `E3` | 
+| `ST1-05` | `T-INV-1` | Create draft `O-105` with valid draft data | Send completion event | HTTP 409 `ORDER_NOT_IN_PROGRESS`; state remains `S1`; no completion side effect | `T-INV-1`, `S1`, `E3` |
 
-Это всё не важно и состояние торта не меняется, пока он не съеден или не стух?)
+**Coverage check**
 
-— Ну он же еще является тортом? Если его начали есть, но не закончили — можно ввести промежуточное состояние "В процессе уничтожения" =))
+- Reachable states: `S1-S6`, `6/6 = 100%`.
+- Valid transitions: `T1-T7`, `7/7 = 100%`; `T5` is exercised by `ST1-02B`.
+- Selected invalid/terminal attempts: `T-TERM-1A`, `T-TERM-1B`, and `T-INV-1`, `3/3 = 100%`, reported separately.
+- Selected guard outcomes: `G1=true`, `G2=true`, `G3=true`, `G4=true`, `G5=true`, and `G6=true`, `6/6 = 100%`.
+- `T-IMP-1` is excluded with a rationale and is not an uncovered valid transition.
 
-1-2 это торт куплен
+Outside scope: all SKU and quantity partitions, payment behavior, concurrent cancellation versus completion, message reordering, and non-functional reliability. These are Residual risks for EP, BVA, Decision Tables, concurrency testing, and reliability testing.
 
-3-4 это в процессе уничтожения
+### Example 2: Guarded document approval
 
-5 выброшен
+**Requirement basis — Assumption.** A requester can submit a document they own. An authorized approver can approve or reject it, but the requester cannot approve their own document. The owner can reopen a rejected document. Authorization requirements are teaching assumptions unless supplied by a real requirement.
 
-— Тогда чем это отличается от
+**Modeled object:** one `Document` object. Users are context for guards, not additional modeled objects.
 
-1. Купила — добавлен на сайт/загружен на сайт/находится на сайте
+**States and invariants**
 
-2. Поставила в холодильник на потом — сохранен, чтобы посмотреть позже
+| State ID | Meaning/invariant | Entry and outgoing behavior | Status |
+| --- | --- | --- | --- |
+| `S21` | `Draft` — document content is editable and owned by the requester | Initial; `T21` exits; `T24` returns here | Assumption |
+| `S22` | `PendingApproval` — submitted content is immutable; approval or rejection is available only to an authorized non-owner where applicable | `T21` enters; `T22`, `T23`, `T25`, or `T26` are attempted here | Assumption |
+| `S23` | `Approved` — approval is finalized and the document is immutable | `T22` enters; terminal for this model | Assumption |
+| `S24` | `Rejected` — rejection reason is persisted and the owner may reopen | `T23` enters; `T24` exits | Assumption |
 
-3 - 4. Передумала, достала, надкусала, снова передумала, решила съесть целиком, осилила половину — в процессе просмотра/уничтожения
+**Guards**
+
+| Guard ID | Predicate | True/false behavior | Status | 
+| --- | --- | --- | --- |
+| `G21` | `actor == document.owner` | True enables submission or reopen; false means a non-owner operation is forbidden | Assumption |
+| `G22` | `actor.hasApprovalAuthority == true` | True enables approval or rejection; false returns HTTP 403 | Assumption |
+| `G23` | `actor.id != document.owner.id` | True enables approval; false blocks self-approval with HTTP 403 | Assumption |
 
-5. Расстроилась и решила не доедать вообще и выкинуть — просмотр прерван/торт в помойке
+**Actions**
 
-— 5-е он еще в процессе.
+| Action ID | Operation/effect | Exact observable result | Status |
+| --- | --- | --- | --- |
+| `A21` | Persist pending approval | State `S22`; submission audit written | Assumption |
+| `A22` | Persist approval | State `S23`; approval audit names actor | Assumption |
+| `A23` | Persist rejection reason | State `S24`; exact reason persisted | Assumption |
+| `A24` | Reopen document | State `S21`; reopen audit written | Assumption |
 
-У сериалов обычно прогресс есть, и его просто так не убрать :)
+**Guards**
 
-- либо досмотрел
+| Guard ID | Predicate | True/false behavior | Status | 
+| --- | --- | --- | --- |
+| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means forbidden owner operation | Assumption |
+| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
+| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption | 
 
-- либо он в процессе просмотра
+**Actions**
 
-— Спасибо!
+| Action ID | Meaning | Status |
+| --- | --- | --- |
+| `A21` | Persist pending approval and audit | Assumption |
+| `A22` | Persist approval and audit | Assumption |
+| `A23` | Persist rejection reason and audit | Assumption |
+| `A24` | Reopen and audit | Assumption | 
 
+**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
 
+| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle | 
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
+| `T22` | `S22` | Approve | `G22=true`, `G23=true` | `A22` | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
+| `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
+| `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
+| `T25` | `S22` | Approve | `G22=false` | None | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external side-effect mutation |
+| `T26` | `S22` | Approve | `G22=true`, `G23=false` | None | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external side-effect mutation |
+
+**Guards**
+
+| Guard ID | Predicate | True/false behavior | Status |
+| --- | --- | --- | --- |
+| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means a non-owner operation is forbidden | Assumption |
+| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
+| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption |
+
+**Actions**
+
+| Action ID | Operation/effect | Exact observable result | Status |
+| --- | --- | --- | --- |
+| `A21` | Persist pending approval | State `S22`; submission audit written | Assumption |
+| `A22` | Persist approval | State `S23`; approval audit names actor | Assumption |
+| `A23` | Persist rejection reason | State `S24`; exact reason persisted | Assumption |
+| `A24` | Reopen document | State `S21`; reopen audit written | Assumption |
+
+**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
+
+| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle | 
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
+| `T22` | `S22` | Approve | `G22=true` and `G23=true` | `A22` | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
+| `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
+| `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
+| `T25` | `S22` | Approve | `G22=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external side-effect mutation |
+| `T26` | `S22` | Approve | `G22=true`, `G23=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external side-effect mutation |
+
+**Cases and coverage**
 
-Примеры S&T
-Примеры диаграмм можно посмотреть в конфлюенсе (доступ открытый без авторизации). Туда я выношу хорошие работы своих студентов. Их там сильно больше, чем в этом разделе статьи + обычно там можно и сам исходник скачать, чтобы внимательно всё рассмотреть. Welcome =)
+| Guard ID | Predicate | True/false behavior | Status |
+| --- | --- | --- | --- |
+| `G21` | `actor == document.owner` | Enables submission or reopen when true; false means a non-owner operation is forbidden | Assumption |
+| `G22` | `actor.hasApprovalAuthority == true` | Enables approval or rejection when true; false returns HTTP 403 | Assumption |
+| `G23` | `actor.id != document.owner.id` | Enables approval when true; false blocks self-approval with HTTP 403 | Assumption |
 
-Вот некоторые из этих работ:
+**Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are listed separately in the same table.
 
+| ID | Source | Event | Guards | Action/effect | Destination | Status | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `T21` | `S21` | Submit | `G21=true`, valid content | `A21` persist pending approval | `S22` | Valid | HTTP 202; state `PendingApproval`; submission audit written |
+| `T22` | `S22` | Approve | `G22=true` and `G23=true` | `A22` persist approval | `S23` | Valid | HTTP 200; state `Approved`; approval audit names actor |
+| `T23` | `S22` | Reject | `G22=true` | `A23` persist rejection reason | `S24` | Valid | HTTP 200; state `Rejected`; exact reason persisted |
+| `T24` | `S24` | Reopen | `G21=true` | `A24` return to draft | `S21` | Valid | HTTP 200; state `Draft`; reopen audit written |
+| `T25` | `S22` | Approve | `G22=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `APPROVER_REQUIRED`; no approval audit or persistence mutation |
+| `T26` | `S22` | Approve | `G22=true`, `G23=false` | No state mutation | `S22` | Invalid/forbidden | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no approval audit or state change |
 
+**Cases and coverage**
 
-Ольга (объект — тест)
+| Test ID | Transition/sequence | Setup, role, and data | Steps and oracle | Covered IDs |
+| --- | --- | --- | --- | --- |
+| `ST2-01` | `T21` | `D-201` in `S21`; owner `u1`; complete document; actor `u1` | Submit; HTTP 202, state `S22`, audit exists | `S21,S22,T21,G21=true,A21` |
+| `ST2-02` | `Q21=(T21,T22)` | `D-202` in `S21`; owner `u1`; authorized approver `u2` | Submit, then approve; HTTP 200; state `S23`; approval audit exists | `T21,T22,G21=true,G22=true,G23=true` |
+| `ST2-03` | `Q22=(T21,T23,T24)` | `D-203`; owner `u1`; authorized approver `u2`; rejection reason `missing-signature` | Submit, reject, owner reopens; states `S21->S22->S24->S21`; exact reason and audits | `T21,T23,T24` |
+| `ST2-04` | `T25` | `D-204` in `S22`; actor `u3` lacks authority | Approve; HTTP 403 `APPROVER_REQUIRED`; state and audit unchanged | `T25,G22=false` |
+| `ST2-05` | `T26` | `D-205` in `S22`; owner `u1` is authorized approver | Approve as owner; HTTP 403 `SELF_APPROVAL_FORBIDDEN`; state and audit unchanged | `T26,G22=true,G23=false` |
 
+Coverage arithmetic:
 
+- Reachable states: `S21-S24`, `4/4 = 100%`.
+- Valid transitions: `T21-T24`, `4/4 = 100%`.
+- Selected guard outcomes: `G21=true` and `G22=true`/`false` and `G23=true`/`false`; six selected outcomes, `6/6 = 100%`.
+- Selected invalid/forbidden transitions: `T25,T26`, `2/2 = 100%`, separate from valid coverage.
 
+The role, authority, and self-approval rules are Assumptions. EP should partition owner/non-owner and authorized/unauthorized actors; BVA may apply to approval expiration if added; Decision Tables should cover combinations of `G21-G23` and any additional context. Role inheritance, delegated authority, simultaneous approvals, and audit retention are Residual risks unless specified.
 
-Кристина (Fallout Shelter)
+### Example 3: Asynchronous payment with timeout and retry
 
-Fallout Shelter — игра под iOS, Android. В постапокалиптическом мире несколько людей было выбрано для создания светлого будущего. Их поместили в небольшое убежище, уходящее под землю. Это убежище необходимо развивать, защищать от угроз из внешнего мира, увеличивать количество жителей, производить ресурсы, выполнять квесты.
+**Requirement basis — Assumption.** One payment is submitted to an external provider. A success callback succeeds the payment. A failure or timeout can retry while the attempt count is below three. At attempt three, timeout expires the payment and failure reaches terminal failure. The exact callback and API behavior below is provisional.
 
+**Modeled object:** one `Payment` object. The provider, timer, queue, and retry worker are trigger sources, not additional modeled objects.
 
-State Transition для пина в Pinterest
+**Timing and ordering assumptions**
 
+- UTC service clock, second precision.
+- Timeout boundary is elapsed time `>= 30 seconds` from entry to `Pending`.
+- Attempt count is `1` when entering `Pending`; `T34` increments it before the next pending attempt.
+- Maximum attempt count is `3`.
+- Duplicate callbacks are possible.
+- Callback ordering and eventual-consistency guarantees are **Question/TBD** unless confirmed by the provider contract.
 
-Типовые ошибки при составлении карты
+**States and transitions**
 
+| State ID | Meaning | Terminal/status |
+| --- | --- | --- |
+| `S31` | Created; amount and payment reference exist but provider submission has not started | Initial |
+| `S32` | Pending; a provider attempt is active, with `attempt` in `1..3` | Active |
+| `S33` | Retrying; a retry job is scheduled after failure or timeout | Recovery/intermediate |
+| `S34` | Succeeded; capture/result is finalized and immutable | Terminal |
+| `S35` | Failed; third attempt failed and no retry remains | Terminal |
+| `S36` | Expired; third attempt timed out and payment is no longer capturable | Terminal |
+
+| Transition ID | Source | Event/source | Guard | Action | Destination | Exact oracle |
+| --- | --- | --- | --- | --- | --- | --- |
+| `T31` | `S31` | `E31 submit` / user | Valid payment data | `A31` create provider attempt | `S32` | HTTP 202; persisted `Pending`, `attempt=1`, one provider request |
+| `T32` | `S32` | `E32 success-callback` / provider | Callback matches payment and attempt | `A32` finalize success | `S34` | HTTP 200 acknowledgement; state `Succeeded`; one capture and one success event |
+| `T33` | `S32` | `E33 failure-callback` / provider | `attempt < 3` | `A33` record failure and enqueue retry | `S33` | HTTP 200 acknowledgement; state `Retrying`; failure recorded; no capture |
+| `T34` | `S33` | `E35 retry-job` / scheduler | Retry job is due | `A34` increment attempt and submit | `S32` | `attempt` increments exactly once; state `Pending`; one provider request |
+| `T35` | `S32` | `E34 timeout` / timer | `elapsed >= 30s` and `attempt < 3` | `A35` record timeout and enqueue retry | `S33` | Timeout record persisted; state `Retrying`; no capture |
+| `T36` | `S32` | `E34 timeout` / timer | `elapsed >= 30s` and `attempt = 3` | `A36` expire payment | `S36` | State `Expired`; no capture; provider cancellation policy is Question/TBD |
+| `T37` | `S32` | `E33 failure-callback` / provider | `attempt = 3` | `A37` finalize failure | `S35` | HTTP 200 acknowledgement; state `Failed`; no retry or capture |
+
+**Robustness cases**
+
+| Test ID | Sequence | Setup and steps | Exact oracle |
+| --- | --- | --- | --- |
+| `ST3-01` | `Q31=(T31,T32)` | Create `P-301`; submit; deliver matching success callback | States `S31->S32->S34`; one capture; persisted success; callback HTTP 200 |
+| `ST3-02` | `Q32=(T31,T35,T34,T32)` | Create `P-302`; submit; wait exactly 30s; retry; deliver success | At boundary timeout is accepted; states `S31->S32->S33->S32->S34`; attempts `1->2`; one capture |
+| `ST3-03` | `Q33=(T31,T35,T34,T35,T34,T36)` | Create `P-303`; timeout attempts 1 and 2; retry to attempt 3; timeout at 30s | States end `S36`; no fourth attempt, no capture, expiration persisted |
+| `ST3-04` | `Q34=(T31,T35,T34,T35,T34,T37)` | Create `P-304`; arrange two failures and retry jobs; fail attempt 3 | State `S35`; exact failure reason; no retry and no capture |
+| `ST3-05` | `DUP31` | Complete `P-305` to `S34`; deliver the same success callback again | **Assumption:** HTTP 200 `already_succeeded`; state, capture count, and audit count unchanged |
+| `ST3-06` | `STALE31` | Complete `P-306` to `S36`; deliver a late success callback | **Assumption:** HTTP 409 `PAYMENT_EXPIRED`; state and capture unchanged; provider ordering policy remains Question/TBD |
+
+Coverage arithmetic:
+
+- Reachable states: `S31-S36`, `6/6 = 100%`.
+- Valid transitions: `T31-T37`, `7/7 = 100%`.
+- Event IDs: `E31-E35`, `5/5 = 100%`.
+- Selected timeout/retry scenarios: first timeout, retry-to-success, and exhausted timeout, `3/3 = 100%`.
+- Selected duplicate/stale scenarios: `DUP31, STALE31`, `2/2 = 100%`.
+- Selected sequences: `Q31,Q32,Q33`, `3/3 = 100%`; longer `Q34` is additionally executed but not required by that denominator.
+
+The exact duplicate, stale-callback, provider cancellation, callback ordering, queue delivery, and eventual-consistency behavior are Assumptions or Questions/TBD as marked. Concurrency between callback and timeout, replay protection, clock skew, backoff, provider retries, and network reliability are Residual risks requiring reliability, security, and concurrency testing.
+
+### Example 4: State coverage versus transition and sequence coverage
+
+**Requirement basis — Confirmed within this teaching model.** A document-like object can start editing, save repeatedly, and submit. The model intentionally demonstrates metric differences.
+
+States: `S41 Ready` (initial), `S42 Editing`, and `S43 Submitted` (terminal).
+
+Transitions:
+
+- `T41`: `S41 -> S42`, start editing.
+- `T42`: `S42 -> S42`, save self-loop.
+- `T43`: `S42 -> S43`, submit.
+- `T44`: invalid submit from `S41`; selected negative case only.
 
-На примере своих студентов мы собрали несколько типовых ошибок, которые допускают тестировщики, впервые рисуя карту:
+Selected pairs and sequence:
 
+- `P41 = (T41,T42)`.
+- `P42 = (T42,T43)`.
+- `Q41 = (T41,T42,T43)`.
 
+Every sequence case records intermediate states and transition IDs, not only the final state.
 
-1. Вместо объекта — GUI
+| Suite | Cases and execution mapping | State coverage | Valid-transition coverage | Pair coverage | Sequence coverage |
+| --- | --- | --- | --- | --- | --- |
+| A | `C4-A`: execute `T41` then `T43`; states `S41->S42->S43` | `3/3 = 100%` | `2/3 = 66.7%`; `T42` missing | `0/2 = 0%` | `0/1 = 0%` |
+| B | Add isolated `C4-B`: start directly in `S42`, execute `T42`; all three states visited across suite | `3/3 = 100%` | `3/3 = 100%` | `0/2 = 0%`; no pair executed consecutively | `0/1 = 0%` |
+| C | Add `C4-C`: execute `T41->T42`; keep `T43` in an isolated case | `3/3 = 100%` | `3/3 = 100%` | `1/2 = 50%`; `P41` only | `0/1 = 0%`; `Q41` not complete |
+| D | Replace/add a complete `C4-D`: execute `T41->T42->T43`; intermediate states `S41->S42->S42->S43` | `3/3 = 100%` | `3/3 = 100%` | `2/2 = 100%` | `1/1 = 100%` |
 
-Очень важно: S&T рисуется на объект! Это не зарисовка графического интерфейса «открыта страница такая, открыта страница сякая»... Если вы описываете разные странички GUI — это уже не S&T.
+The invalid `T44` case is a separate selected-invalid metric: `1/1 = 100%`. It is not added to the three-item valid-transition denominator. Suite A proves that all states can be visited while `T42` is absent. Suite B proves that all valid transitions can be executed in separate cases while no selected pair is exercised. Suite C closes one pair; Suite D closes both pairs and the selected sequence. None of these metrics proves all values, guards, paths, branches, requirements, or non-functional behavior.
 
+## When to use State-Transition Testing
 
-Зарисовывать страницы смысла обычно нет. Это как при рисовании майнд-карты — мы не рисуем графический интерфейс, мы описываем функционал. То, зачем пользователь вообще пришел на сайт. Это намного полезнее!
+Use it when:
 
-См также:
+- an object or process has a meaningful lifecycle;
+- behavior depends on current state or event history;
+- user, system, timer, external, or asynchronous events cause observable changes;
+- retries, timeout, expiration, cancellation, recovery, reopening, or terminal states matter;
+- the same event behaves differently by state or context;
+- invalid or out-of-order events are high risk;
+- the team needs traceability from lifecycle requirements to executable sequences;
+- a finite or partitionable model is understandable and maintainable.
 
-Как нарисовать карту приложения (mind map)
+Do not force it onto a GUI navigation map with no domain-state change, a single unordered input better served by EP/BVA, many independent parameters better served by Pairwise, a multi-condition rule better served by Decision Tables, or an actor goal better served by use-case/scenario testing.
 
-Другой вариант той же ошибки: искать билет — (результаты поиска) — открыть форму покупки — (форма открыта) — ввести данные кредитной карты — (данные введены).
+## Limitations and common mistakes
 
+State-Transition Testing does not by itself cover unmodeled values and formats, numeric or time boundaries, large independent-parameter combinations, complex Boolean guards, every path through loops, implementation branches, concurrency interleavings, or security, performance, reliability, usability, accessibility, and compatibility behavior.
 
+Avoid these mistakes:
 
-
-2. Несколько объектов в одной карте
-
-На прошлой картинке у нас несколько объектов: результаты поиска, форма, данные. И все — плохие. Потому что там мы явно что-то покупаем, вот это «что-то» и есть объект!
-
-Но когда мы описываем покупку, тоже легко скатиться в несколько объектов в одной карте: "пицца в корзине", "заказ оформлен".
-
-
-Товар тоже очень часто путают, потому что есть два варианта:
-
-как на авито — продается конкретная вещь: "Нет на сайте", "Продается", "Продан".
-
-просто "товарная позиция", как какие-нибудь носки в магазине одежды: "Отсутствует", "В наличии", "Ожидается поступление" и так далее.
-
-Если речь о сайте типа авито, то объект лучше выбрать "объявление", будет логичнее. А вот если мы покупаем пиццу — это будет товарной позицией.
-
-
-
-3. Несколько одинаковых состояний
-
-Вспомните пример с тортиком:
-
-Купила.
-
-Поставила в холодильник на потом.
-
-Передумала, достала, надкусала.
-
-Снова передумала, решила съесть целиком, осилила половину.
-
-Расстроилась, решила не доедать вообще и выкинуть.
-
-Половину пунктов можно объединить. Ведь состояние торта не меняется от того, купили вы его только что или час назад, сидите любуетесь на него, переставляете с места на место или убираете в холодильник:
-
-1-2 это торт куплен;
-
-3-4 в процессе уничтожения;
-
-5 выброшен.
-
-
-
-
-Другой пример — объект «пин»:
-
-пин создан;
-
-пин откоментирован;
-
-пин перенесен другим пользователем себе на доску.
-
-Но, когда пин откомментирован или сдублирован — это тоже самое, когда он просто создан. Состояние самого пина не меняется!
-
-
-
-Или например:
-
-товар в базе
-
-товар найден при поиске
-
-Одно и то же с точки зрения товара. Он как был, так и есть.
-
-Плюсы подхода
-Плюс рисования — это визуализация ТЗ, которая:
-
-Красиво выглядит
-
-Позволяет увидеть, что мы упустили
-
-На входе унылая стена текста, а мы красиво зарисовали, при этом разными цветами — вот данные попали туда, вот сюда... В итоге наглядно видим весь маршрут нашего объекта.
-
-И пока мы рисуем его маршрут, мы можем сразу же заметить, что «Ага! Вот из этого состояния, наверное, можно вернуться ещё вот в это», то есть мы можем понять, что упускаем. А если бы не нарисовали, то даже не додумались бы до такого теста!
-
-
-
-Минусы подхода
-Не всегда визуализация делает ТЗ понятнее. И тогда начинаем думать, как это решать:
-
-Слишком насыщенная карта — разбиваем на несколько маленьких.
-
-Сложно поддерживать — нужна ли она вообще?
-
-Если на диаграмме куча всего — это плохо, ведь ее главная фишка — понятность. И если мы на нее смотрим и просто теряемся в этом объеме стрелочек — значит, схема нам не помогает.
-
-Поэтому если схема насыщенная — разбиваем на мелкие. Которые, возможно, ссылаются друг на друга. То есть вот есть верхнеуровневая схема, а вот на каждое действие есть уровни подетализированнее.
-
-
-Не стоит рисовать все-все-все стрелочки. Из любого состояния можно закрыть браузер, но не надо рисовать это. Просто держите в уме, что есть кнопка «закрыть», а еще может интернет пропасть, или сервер упадет, или еще какая катастрофа случится...
-
-На диаграмме же показываем все важные стрелочки. Если их слишком много, то придумываем, как уменьшить их количество, чтобы не переборщить, потеряв наглядность.
-
-
-
-
-Инструменты для рисования
-
-
-Бумага и ручка!!
-
-Маркер и доска
-
-Xmind (freemind, etc)
-
-Microsoft Visio
-
-PowerPoint
-
-YeD
-
-...
-
-Основной инструмент — ручка и бумага, или маркер и доска. Потому что если вам надо просто обсудить, что будет, «если из этого состояния перейти в это, и как должна система реагировать, если происходит вот то», то вполне достаточно нарисовать это от руки.
-
-
-К тому же от руки получается быстрее, а иногда еще и красивее. Почему? Потому что когда мы начинаем использовать инструмент, то он нас ограничивает. Вот, нам надо нарисовать стрелочку, так, а как нам это сделать...  Мы начинаем думать в стиле инструмента. Это как когда мы создаем презентации в power point, то вместо мыслей о докладе думаем, как бы назвать новый слайд.
-
-А если бумажка рядом, можно спокойно генерить в голове идеи и условия. Что придумал? Зарисовал кое-как. Если очень хочется, потом перерисовал красиво. А, может, и так сойдет.
-
-В любом случае смотрите сами. Если удобен какой-то инструмент — используйте его! Хорошо получаются такие схемы в Xmind или Yed, или в гуглодокументах. Попробуйте использовать несколько разных инструментов, а потом выберите тот, что больше по душе. Но в целом бумага и ручка вполне себе вариант!
-
-
-
-Итого
-
-
-Рисунок — мощнейший инструмент визуализации. Вот вы открываете статью с картинками, типа этой. На что вы смотрите в первую очередь — на картинку или на текст? Правильно, на картинку.
-
-Поэтому я за то, что рисовать! Нарисовали? Добавили в ТЗ! Всем удобнее, даже заказчику. Ведь с картинками текс становится понятнее.
-
-Настоятельно рекомендую рисовать диаграмму состояний и переходов. Пусть даже одноразово, маркером на доске, чтобы обсудить новое ТЗ, которое пришло от аналитиков.
-
-Зарисовали, позвали аналитика и стали обсуждать:
-
-— А вот смотрите, вот эта стрелочка... может нам стоит сделать еще вот это?
-
-— А что будет, если вот так?
-
-Кстати, лайфхак. Если зарисовали маркером и жалко свое творчество (уж больно продуктивное общение с командой вышло) — сфотографируйте и выложите в конфлюенс рисунок! Не обязательно тратить время на перерисовку =)
+1. Modeling GUI screens rather than domain behavior.
+2. Mixing several objects without a composition rule.
+3. Creating a state for every incidental action.
+4. Leaving invariants, entry criteria, or boundaries implicit.
+5. Treating every arrow as a ready test case.
+6. Omitting system, timer, external, callback, or scheduled triggers.
+7. Ignoring invalid, duplicate, stale, out-of-order, and terminal events.
+8. Confusing invalid attempts with impossible or unreachable model elements.
+9. Treating rejection, no-op, error, and recovery as the same oracle.
+10. Leaving role, data, time, timezone, or reference-clock context unspecified.
+11. Ignoring self-loops, retries, timeouts, reset, reopen, or recovery.
+12. Assuming one path covers every behavior of a state.
+13. Counting state coverage as transition coverage.
+14. Counting transition coverage as sequence or path coverage.
+15. Claiming all paths without selecting a finite scope.
+16. Inferring precedence from table order without a requirement.
+17. Flattening concurrent dimensions without legal-combination rules.
+18. Using vague oracles such as “the system works correctly.”
+19. Trusting a visually attractive diagram without table, reachability, and arithmetic review.
+20. Removing high-risk transitions merely to reduce diagram density.
+21. Making asynchronous cases non-repeatable by omitting clock and ordering settings.
+22. Assuming a state model proves non-functional quality.
+
+## Complementary techniques
+
+- **Equivalence Partitioning (EP):** partitions payloads, roles, states, and guard inputs into behaviorally distinct classes.
+- **Boundary Value Analysis (BVA):** targets timeout, expiration, retry-count, age, quota, and other state-changing edges.
+- **Decision Tables:** enumerate combinations of guards and actions when a transition depends on several conditions.
+- **Pairwise Testing:** covers interactions among mostly independent platforms, flags, roles, environments, and event parameters.
+- **Condition/cause-effect coverage:** analyzes complex Boolean relationships behind guards.
+- **Use-case/scenario testing:** covers actor goals and end-to-end flows across several transitions.
+- **Model-based testing:** can generate sequences from a formal model, but automation does not remove the need for requirement validation.
+- **Error guessing:** adds duplicate, stale, replay, out-of-order, reset, crash-recovery, and historically defective events.
+- **Risk-based testing:** prioritizes financial, security, safety, authorization, data-loss, and high-impact transitions.
+- **Exploratory testing:** investigates behavior outside the declared model.
+- **Security, performance, reliability, accessibility, usability, and compatibility testing:** address non-functional risks not proved by state coverage.
+
+A practical combination is EP for state and guard classes, BVA for timing and count edges, Decision Tables for guard combinations, State-Transition Testing for lifecycle and sequences, Pairwise for independent context combinations, and risk-based, error-guessing, model-based, exploratory, and non-functional follow-up for residual risks.
+
+## Reusable templates
+
+### State model and invariant template
+
+| State ID | State name/meaning | Entry criteria | State invariant | Allowed events/actions | Forbidden events and exact oracle | Persistence/context | Terminal/dead-end status | Requirement reference | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `STATE-1` |  |  |  |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
+
+### Event, guard, and action template
+
+| Element ID | Type | Meaning/source or formal predicate | Applicable states/context | True/false or expected influence/oracle | Payload/dependencies/timing | Requirement reference | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `EVENT-1` | Event / Guard / Action |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
+
+### Transition inventory template
+
+| Transition ID | Source state | Event/trigger | Guard | Action/effect | Destination state | Validity/status | Exact observable oracle | Retry/timeout/loop/terminal attribute | Requirement reference | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `TRANS-1` |  |  |  |  |  | Valid / invalid / forbidden / impossible / TBD |  |  |  | Confirmed / Assumption / Question/TBD |
+
+### Transition table template
+
+State the orientation and semantics before using the table. This row-oriented form is execution-friendly.
+
+| Transition ID | Source state | Trigger/event | Guard/preconditions | Action/effect | Destination state | Valid/invalid/impossible status | Constraint IDs | Expected response/side effects | Covered cases |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `TRANS-1` |  |  |  |  |  |  |  |  |  |
+
+### Executable test-case template
+
+| Test case ID | Transition/sequence ID | Title/objective | Requirement reference | Priority | Preconditions/setup | Initial/source state | Complete input and context | Event/steps | Guard/precondition evidence | Exact expected response/action/oracle | Expected destination state | Side effects/persistence/notifications | Covered state/event/guard/action/transition IDs | Technique tags | Assumptions/notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `ST-001` | `TRANS-1` |  |  | High/Medium/Low |  |  |  | 1.  2.  3.  |  |  |  |  |  | State-Transition / EP / BVA / Decision Table / negative |  |
+
+For a sequence, record every intermediate state and transition ID. Every positive case starts in a reachable state with complete valid context. Every negative case identifies the violated rule or guard and exact resulting state and side effects.
+
+### Coverage and gap template
+
+| Coverage ID | Metric | Required denominator | Exercised numerator | Percentage | Uncovered items | Exclusions and rationale | Evidence/notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `COV-1` | Reachable-state coverage |  |  |  |  |  |  |
+
+### Residual-risk template
+
+| Risk ID | Uncovered or weakly modeled area | Reason not covered | Impact/priority | Complementary technique or follow-up | Status |
+| --- | --- | --- | --- | --- | --- |
+| `RISK-1` |  |  |  |  | Residual risk / Question/TBD |
+
+## Verification checklist
+
+Before approving a State-Transition design, verify:
+
+- [ ] Scope, modeled object/lifecycle, requirement basis, setup, and exact oracle are documented.
+- [ ] The diagram, model, and testing technique are distinguished.
+- [ ] One object or explicitly bounded process is modeled; composition is explicit for multiple dimensions.
+- [ ] States have stable IDs, behaviorally distinct meanings, entry criteria, invariants, allowed and forbidden actions.
+- [ ] States are mutually exclusive and collectively exhaustive for the boundary, or gaps are visible.
+- [ ] Initial, terminal, error, recovery, and dead-end states are identified where relevant.
+- [ ] GUI screens and incidental actions are not incorrectly treated as domain states.
+- [ ] Equivalent states are merged or their distinction is justified.
+- [ ] Events have stable IDs, sources, payload/context, applicable states, and ordering/retry semantics.
+- [ ] Guards have stable IDs, predicates, true/false outcomes, context, boundaries, and failed-guard oracles.
+- [ ] Transitions have stable IDs, source/destination, event, guard, action, validity, and exact outcomes.
+- [ ] User, system, timer, external, callback, scheduled, and data-driven events are included when relevant.
+- [ ] Self-loops, retries, timeouts, reset/reopen, recovery, duplicates, stale events, ordering, and terminal events are considered.
+- [ ] Valid, invalid, forbidden, impossible, unreachable, and unknown behavior are distinct.
+- [ ] Invalid cases identify the violated rule and exact rejection/no-op/error/side-effect oracle.
+- [ ] Impossible/unreachable elements have exclusion rationales and are not valid-coverage denominator items.
+- [ ] Clock, timezone, precision, reference time, ordering, and eventual-consistency assumptions are explicit.
+- [ ] Concurrent dimensions use explicit composition or orthogonal modeling.
+- [ ] Diagram notation, markers, labels, legend, and table authority are clear.
+- [ ] Dense models are split without deleting important risk transitions.
+- [ ] Every selected transition maps to a complete executable case with traceability.
+- [ ] Sequence cases record every intermediate state and transition ID.
+- [ ] State, valid-transition, event, guard, invalid, terminal, invariant, pair, sequence/path, and timing/retry metrics are separate where selected.
+- [ ] Coverage uses deduplicated IDs and explicit denominators.
+- [ ] State coverage is not presented as transition or path coverage.
+- [ ] Transition coverage is not presented as all guards, values, sequences, branches, requirements, concurrency, or non-functional coverage.
+- [ ] Uncovered items, exclusions, assumptions, Questions/TBD, and residual risks are visible.
+- [ ] EP, BVA, Decision Tables, Pairwise, scenario, condition/cause-effect, model-based, error-guessing, risk-based, and exploratory follow-ups are identified where useful.
+- [ ] Oracles are exact rather than “works correctly.”
+- [ ] Tables render with matching columns and the document contains no blank scaffolds, duplicate headings, placeholders, or non-English prose.
