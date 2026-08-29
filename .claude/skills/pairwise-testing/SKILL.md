@@ -170,13 +170,13 @@ Preserve a format requested by the user (Gherkin, JSON, CSV, test-management tab
 ### Constraint/dependency model
 
 | Constraint ID | Formal rule | Allowed/forbidden combinations | Affected parameters | Impact on legal rows or pairs | Observable consequence | Status |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- |
 | `CON-1` |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
 
 ### Pair inventory
 
 | Pair ID | Parameter A / level | Parameter B / level | Legal/required? | Legal-completion rationale | Covered test cases | Status |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- |
 | `PAIR-1` |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
 
 A required pair uses two distinct parameters and has at least one legal complete-row extension.

@@ -158,13 +158,13 @@ A covering array may be unbalanced: pairwise coverage does not require each leve
 ### Constraint/dependency model
 
 | Constraint ID | Formal rule | Allowed/forbidden combinations | Affected parameters | Impact on legal rows or pairs | Observable consequence | Status |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- |
 | `CON-1` |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
 
 ### Pair inventory
 
 | Pair ID | Parameter A / level | Parameter B / level | Legal/required? | Legal-completion rationale | Covered test cases | Status |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- |
 | `PAIR-1` |  |  |  |  |  | Confirmed / Assumption / Question/TBD |
 
 A required pair must use two distinct parameters and have at least one legal complete-row extension.
@@ -213,7 +213,20 @@ The following rows use a verified binary covering array:
 | `PW1-007` | macOS | Firefox | en-US | Password |
 | `PW1-008` | macOS | Firefox | fr-FR | SSO |
 
-Each row is a complete legal configuration. Pair IDs can be named by factor pair and levels, for example `PAIR-OS-BROWSER-Windows-Chrome` and `PAIR-LOCALE-AUTH-fr-FR-SSO`.
+Each row is a complete legal configuration. Use stable pair IDs in the form `P1-<factor-pair>-<levels>`, such as `P1-OS-BROWSER-Windows-Chrome` and `P1-LOCALE-AUTH-fr-FR-SSO`. The following mapping makes the 24 required IDs auditable; each row covers exactly one ID in each factor-pair column:
+
+| Test case ID | `OS × BROWSER` | `OS × LOCALE` | `OS × AUTH` | `BROWSER × LOCALE` | `BROWSER × AUTH` | `LOCALE × AUTH` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PW1-001` | `P1-OS-BROWSER-Windows-Chrome` | `P1-OS-LOCALE-Windows-en-US` | `P1-OS-AUTH-Windows-Password` | `P1-BROWSER-LOCALE-Chrome-en-US` | `P1-BROWSER-AUTH-Chrome-Password` | `P1-LOCALE-AUTH-en-US-Password` |
+| `PW1-002` | `P1-OS-BROWSER-Windows-Chrome` | `P1-OS-LOCALE-Windows-fr-FR` | `P1-OS-AUTH-Windows-SSO` | `P1-BROWSER-LOCALE-Chrome-fr-FR` | `P1-BROWSER-AUTH-Chrome-SSO` | `P1-LOCALE-AUTH-fr-FR-SSO` |
+| `PW1-003` | `P1-OS-BROWSER-Windows-Firefox` | `P1-OS-LOCALE-Windows-en-US` | `P1-OS-AUTH-Windows-SSO` | `P1-BROWSER-LOCALE-Firefox-en-US` | `P1-BROWSER-AUTH-Firefox-SSO` | `P1-LOCALE-AUTH-en-US-SSO` |
+| `PW1-004` | `P1-OS-BROWSER-Windows-Firefox` | `P1-OS-LOCALE-Windows-fr-FR` | `P1-OS-AUTH-Windows-Password` | `P1-BROWSER-LOCALE-Firefox-fr-FR` | `P1-BROWSER-AUTH-Firefox-Password` | `P1-LOCALE-AUTH-fr-FR-Password` |
+| `PW1-005` | `P1-OS-BROWSER-macOS-Chrome` | `P1-OS-LOCALE-macOS-en-US` | `P1-OS-AUTH-macOS-SSO` | `P1-BROWSER-LOCALE-Chrome-en-US` | `P1-BROWSER-AUTH-Chrome-SSO` | `P1-LOCALE-AUTH-en-US-SSO` |
+| `PW1-006` | `P1-OS-BROWSER-macOS-Chrome` | `P1-OS-LOCALE-macOS-fr-FR` | `P1-OS-AUTH-macOS-Password` | `P1-BROWSER-LOCALE-Chrome-fr-FR` | `P1-BROWSER-AUTH-Chrome-Password` | `P1-LOCALE-AUTH-fr-FR-Password` |
+| `PW1-007` | `P1-OS-BROWSER-macOS-Firefox` | `P1-OS-LOCALE-macOS-en-US` | `P1-OS-AUTH-macOS-Password` | `P1-BROWSER-LOCALE-Firefox-en-US` | `P1-BROWSER-AUTH-Firefox-Password` | `P1-LOCALE-AUTH-en-US-Password` |
+| `PW1-008` | `P1-OS-BROWSER-macOS-Firefox` | `P1-OS-LOCALE-macOS-fr-FR` | `P1-OS-AUTH-macOS-SSO` | `P1-BROWSER-LOCALE-Firefox-fr-FR` | `P1-BROWSER-AUTH-Firefox-SSO` | `P1-LOCALE-AUTH-fr-FR-SSO` | 
+
+The mapping covers all four level pairs in each of the six factor-pair columns, yielding 24 distinct pair IDs.
 
 #### Preconditions, actions, and oracle
 
@@ -288,7 +301,21 @@ Constraints:
 | `PW2-008` | Linux | Firefox | Card | Legal |
 | `PW2-009` | macOS | Firefox | PayPal | Legal |
 
-Common preconditions: checkout service is available, the test user is authorized, and no checkout session exists for the test order. Actions: set the complete row, open checkout, submit the configuration, and inspect the response and resulting session. Exact positive oracle: HTTP `200 OK`; checkout loads; the selected values are displayed unchanged; a checkout session is created; no unsupported warning appears.
+Stable pair IDs use `P2-<factor-pair>-<levels>`. This row mapping assigns every legal pair to at least one positive case:
+
+| Test case ID | `OS × BROWSER` | `OS × PAYMENT` | `BROWSER × PAYMENT` |
+| --- | --- | --- | --- |
+| `PW2-001` | `P2-OS-BROWSER-Windows-Chrome` | `P2-OS-PAYMENT-Windows-Card` | `P2-BROWSER-PAYMENT-Chrome-Card` |
+| `PW2-002` | `P2-OS-BROWSER-Windows-Firefox` | `P2-OS-PAYMENT-Windows-PayPal` | `P2-BROWSER-PAYMENT-Firefox-PayPal` |
+| `PW2-003` | `P2-OS-BROWSER-macOS-Chrome` | `P2-OS-PAYMENT-macOS-PayPal` | `P2-BROWSER-PAYMENT-Chrome-PayPal` |
+| `PW2-004` | `P2-OS-BROWSER-macOS-Firefox` | `P2-OS-PAYMENT-macOS-Card` | `P2-BROWSER-PAYMENT-Firefox-Card` |
+| `PW2-005` | `P2-OS-BROWSER-macOS-Safari` | `P2-OS-PAYMENT-macOS-Card` | `P2-BROWSER-PAYMENT-Safari-Card` |
+| `PW2-006` | `P2-OS-BROWSER-macOS-Safari` | `P2-OS-PAYMENT-macOS-PayPal` | `P2-BROWSER-PAYMENT-Safari-PayPal` |
+| `PW2-007` | `P2-OS-BROWSER-Linux-Chrome` | `P2-OS-PAYMENT-Linux-Card` | `P2-BROWSER-PAYMENT-Chrome-Card` |
+| `PW2-008` | `P2-OS-BROWSER-Linux-Firefox` | `P2-OS-PAYMENT-Linux-Card` | `P2-BROWSER-PAYMENT-Firefox-Card` |
+| `PW2-009` | `P2-OS-BROWSER-macOS-Firefox` | `P2-OS-PAYMENT-macOS-PayPal` | `P2-BROWSER-PAYMENT-Firefox-PayPal` |
+
+The mapping covers all seven required `OS × BROWSER` IDs, all five required `OS × PAYMENT` IDs, and all six `BROWSER × PAYMENT` IDs. Common preconditions: checkout service is available, the test user is authorized, and no checkout session exists for the test order. Actions: set the complete row, open checkout, submit the configuration, and inspect the response and resulting session. Exact positive oracle: HTTP `200 OK`; checkout loads; the selected values are displayed unchanged; a checkout session is created; no unsupported warning appears.
 
 #### Legal-completion analysis and pair inventory
 
@@ -313,10 +340,10 @@ These rows are not positive covering-array rows and do not increase legal pairwi
 
 | Test case ID | OS | BROWSER | PAYMENT | Violated constraint | Preconditions/actions | Exact negative oracle |
 | --- | --- | --- | --- | --- | --- | --- |
-| `PW2-N001` | Windows | Safari | Card | `CON-1` | Authorized user; submit the complete row. | HTTP `400 Bad Request`; exact message `Browser Safari is supported only on macOS`; no checkout session is created. |
-| `PW2-N002` | Linux | Chrome | PayPal | `CON-2` | Authorized user; submit the complete row. | HTTP `400 Bad Request`; exact message `PayPal is unavailable on Linux`; no payment authorization is attempted. |
+| `PW2-N001` | Windows | Safari | Card | `CON-1` | Authorized user; submit the complete row. | HTTP `400 Bad Request`; exact message `Browser Safari is supported only on macOS`; no checkout session is created; no payment authorization is attempted. |
+| `PW2-N002` | Linux | Chrome | PayPal | `CON-2` | Authorized user; submit the complete row. | HTTP `400 Bad Request`; exact message `PayPal is unavailable on Linux`; no checkout session is created; no payment authorization is attempted. |
 
-The forbidden/invalid-combination metric is therefore `2 / 2 = 100%` for these selected negative rules, reported separately from the `18 / 18 = 100%` legal positive pairwise metric. The nominal forbidden pairs are excluded, not uncovered required pairs.
+The forbidden/invalid-combination metric is therefore `2 / 2 = 100%` for these two selected negative rules, reported separately from the `18 / 18 = 100%` legal positive pairwise metric. The nominal forbidden pairs are excluded, not uncovered required pairs. If the requirement also demands a negative test for `Linux + Safari`, add it separately; it is a second `CON-1` violation and is not silently represented by either row above.
 
 ### Example 3: Higher-order interaction risk
 
@@ -343,6 +370,15 @@ A settings operation accepts:
 
 Common preconditions: the account is authorized, settings storage is empty or reset, and the settings service is available. Actions: submit the complete row, reload settings, and inspect the response, labels, and persisted values. Exact oracle: HTTP `200 OK`; dashboard loads; all three submitted values persist unchanged; localized labels match the selected locale.
 
+Use pair IDs `P3-PLAN-LOCALE-*`, `P3-PLAN-MFA-*`, and `P3-LOCALE-MFA-*`. The four rows cover all four level pairs in each of the three factor-pair columns:
+
+| Test case ID | `PLAN × LOCALE` | `PLAN × MFA` | `LOCALE × MFA` |
+| --- | --- | --- | --- |
+| `PW3-001` | `P3-PLAN-LOCALE-Basic-en-US` | `P3-PLAN-MFA-Basic-Off` | `P3-LOCALE-MFA-en-US-Off` |
+| `PW3-002` | `P3-PLAN-LOCALE-Basic-fr-FR` | `P3-PLAN-MFA-Basic-On` | `P3-LOCALE-MFA-fr-FR-On` |
+| `PW3-003` | `P3-PLAN-LOCALE-Pro-en-US` | `P3-PLAN-MFA-Pro-On` | `P3-LOCALE-MFA-en-US-On` |
+| `PW3-004` | `P3-PLAN-LOCALE-Pro-fr-FR` | `P3-PLAN-MFA-Pro-Off` | `P3-LOCALE-MFA-fr-FR-Off` |
+
 The array covers `PLAN × LOCALE`, `PLAN × MFA`, and `LOCALE × MFA` at `4 / 4 = 100%` each, for `12 / 12 = 100%` overall 2-way coverage. However, the triple `Pro + fr-FR + On` is absent.
 
 **Residual risk R1:** a defect may occur only when `PLAN = Pro`, `LOCALE = fr-FR`, and `MFA = On`, returning HTTP `500`, showing the wrong language, or failing to persist MFA even though every individual level and every 2-way pair passes.
@@ -355,7 +391,7 @@ Add the targeted 3-way case:
 | --- | --- | --- | --- | --- |
 | `PW3-005` | Pro | fr-FR | On | HTTP `200 OK`; dashboard loads; French labels are displayed; `Pro`, `fr-FR`, and `MFA=On` persist unchanged. |
 
-The complete 3-way universe has `2 × 2 × 2 = 8` tuples. The initial four rows cover `4 / 8 = 50%`; the missing tuples are `Basic + en-US + On`, `Basic + fr-FR + Off`, `Pro + en-US + Off`, and `Pro + fr-FR + On`. If all higher-order tuples are required, add the four missing rows and report `8 / 8 = 100%` 3-way coverage.
+Assign tuple ID `TUPLE-PLAN-LOCALE-MFA-Pro-fr-FR-On` to `PW3-005`. The complete 3-way universe has `2 × 2 × 2 = 8` tuples. The initial four rows cover `4 / 8 = 50%`; the four tuples missing before `PW3-005` are `Basic + en-US + On`, `Basic + fr-FR + Off`, `Pro + en-US + Off`, and `Pro + fr-FR + On` (the last is covered by `PW3-005`). After executing `PW3-005`, coverage is `5 / 8 = 62.5%` and only these three tuples remain: `Basic + en-US + On`, `Basic + fr-FR + Off`, and `Pro + en-US + Off`. Add those three rows, with IDs `PW3-006` through `PW3-008`, and report `8 / 8 = 100%` 3-way coverage. The three remaining tuple IDs are `TUPLE-PLAN-LOCALE-MFA-Basic-en-US-On`, `TUPLE-PLAN-LOCALE-MFA-Basic-fr-FR-Off`, and `TUPLE-PLAN-LOCALE-MFA-Pro-en-US-Off`.
 
 Choose 3-way or stronger testing when risk, defect history, architecture, or evidence indicates that three or more parameters can jointly cause failure. Use a decision table when the defect is an explicit combination of business conditions and actions, state-transition testing for lifecycle paths, and EP/BVA for missing behavioral classes or boundaries. Pairwise alone does not cover this higher-order defect.
 
