@@ -45,7 +45,7 @@ For one input, partition coverage can be calculated as:
 
 `exercised partitions / identified partitions × 100%`
 
-When several inputs each have their own partition set, covering every partition at least once is commonly called **Each Choice Coverage**. It does not mean that every combination of input partitions has been tested; use decision tables or pairwise testing for that risk.
+When several inputs each have their own partition set, **Each Choice Coverage** means exercising every input/partition pair at least once. It does not mean that every combination of input partitions has been tested; use decision tables, pairwise testing, or exhaustive testing for that risk.
 
 Partitions are derived from the requirement, not only from the data type. Two values that look similar may belong to different partitions if they cause different messages, response codes, processing paths, permissions, or state changes.
 
@@ -157,10 +157,9 @@ Run the cases, record the actual result, and mark the covered partition. If a pa
 
 Use the following template as a starting point. Adapt the columns to the test-management tool used by the project.
 
-| Test case ID | Requirement / input | Partition ID and description | Preconditions | Input value | Steps | Expected result / oracle | Priority | Covered partitions | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| EP-001 | Admission percentage | P2: valid range `[50,90]` | Admission form is open; candidate data is available | `70` | Enter `70` and submit the form | The value is accepted; no range-validation error is shown | High | P2 | Confirm endpoints separately with BVA |
-|  |  |  |  |  |  |  |  |  |  |
+| Test case ID | Requirement reference | Input ID | Partition ID and formal definition | Priority | Preconditions/setup | Complete input/context | Steps/actions | Exact expected result/oracle | Covered input/partition pairs | Technique tags | Assumptions/notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `EP-001` | `REQ-1` | `PERCENTAGE` | `PERCENTAGE-P2`: valid `[50,90]` | High | Admission form is open; candidate data is available | `percentage=70`; all other fields valid and nominal | Enter `70`; submit the form | HTTP `200`; value is accepted; no range-validation error; admission processing continues | `PERCENTAGE/PERCENTAGE-P2` | EP | Confirm endpoints separately with BVA; replace assumptions with the product contract |
 
 A simple coverage review can use a matrix with one row per partition and one column per test case. Every partition should have at least one marked test. If a test covers several independent fields, record each field/partition pair rather than marking only the test-case ID.
 
@@ -168,34 +167,34 @@ A simple coverage review can use a matrix with one row per partition and one col
 
 ### Example 1: College admission percentage
 
-**Requirement assumption:** The percentage field accepts whole-number values from `50%` through `90%`, inclusive. Values outside that interval are rejected. Non-numeric and blank values are also rejected, with different validation behavior. If the actual requirement does not distinguish these errors, combine the corresponding invalid classes.
+**Requirement assumption `REQ-EP-01` (Assumption):** The percentage field accepts whole-number values from `50%` through `90%`, inclusive. Values outside that interval are rejected. Non-numeric and blank values are also rejected with different validation behavior. The cases below use HTTP `200` for accepted input and HTTP `400` for each rejection; replace these assumed statuses and messages with the actual contract before execution.
 
-| Partition | Definition | Representative | Expected result |
-| --- | --- | --- | --- |
-| P1: below range | Numeric percentage `<50` | `49` | Reject and show the below-minimum validation error. |
-| P2: valid range | Numeric percentage `[50,90]` | `70` | Accept the value and continue admission processing. |
-| P3: above range | Numeric percentage `>90` | `91` | Reject and show the above-maximum validation error. |
-| P4: malformed | A value that cannot be parsed as a percentage | `abc` | Reject and show the format validation error. |
-| P5: blank/missing | No value or an empty value | blank | Reject and show the required-field error. |
+| Partition ID | Input ID | Formal definition | Representative | Exact expected result/oracle | Status |
+| --- | --- | --- | --- | --- | --- |
+| `PERCENTAGE-P1` | `PERCENTAGE` | Numeric percentage `<50` | `49` | HTTP `400`; below-minimum validation error; admission processing does not start | Assumption |
+| `PERCENTAGE-P2` | `PERCENTAGE` | Numeric percentage `[50,90]` | `70` | HTTP `200`; value is accepted and admission processing continues | Assumption |
+| `PERCENTAGE-P3` | `PERCENTAGE` | Numeric percentage `>90` | `91` | HTTP `400`; above-maximum validation error; admission processing does not start | Assumption |
+| `PERCENTAGE-P4` | `PERCENTAGE` | Value cannot be parsed as a percentage | `abc` | HTTP `400`; format validation error; admission processing does not start | Assumption |
+| `PERCENTAGE-P5` | `PERCENTAGE` | Missing or empty value | blank | HTTP `400`; required-field error; admission processing does not start | Assumption |
 
 The representatives test the classes, but they do not replace boundary tests. Add `49`, `50`, `90`, and `91` as boundary-focused tests when applying Boundary Value Analysis (BVA).
 
 ### Example 2: Numeric field from 1 through 1000
 
-**Requirement assumption:** The field accepts integer values in `[1,1000]`. It rejects values below `1`, values above `1000`, and input that cannot be parsed as an integer.
+**Requirement assumption `REQ-EP-02` (Assumption):** The field accepts integer values in `[1,1000]`. It rejects values below `1`, values above `1000`, and input that cannot be parsed as an integer. Accepted input returns HTTP `200` and persists the submitted integer; rejected input returns HTTP `400` and does not persist it.
 
-| Partition | Representative | Expected result |
-| --- | --- | --- |
-| P1: below minimum (`x < 1`) | `-37` | Reject as out of range. |
-| P2: valid range (`1 <= x <= 1000`) | `46` | Accept and process the value. |
-| P3: above maximum (`x > 1000`) | `1773` | Reject as out of range. |
-| P4: malformed or non-numeric | `Name` | Reject as invalid numeric input. |
+| Partition ID | Input ID | Formal definition | Representative | Exact expected result/oracle | Status |
+| --- | --- | --- | --- | --- | --- |
+| `QUANTITY-P1` | `QUANTITY` | Numeric integer `x < 1` | `-37` | HTTP `400`; below-minimum error; value is not persisted | Assumption |
+| `QUANTITY-P2` | `QUANTITY` | Numeric integer `1 <= x <= 1000` | `46` | HTTP `200`; stored quantity equals integer `46` | Assumption |
+| `QUANTITY-P3` | `QUANTITY` | Numeric integer `x > 1000` | `1773` | HTTP `400`; above-maximum error; value is not persisted | Assumption |
+| `QUANTITY-P4` | `QUANTITY` | Malformed or non-numeric representation | `Name` | HTTP `400`; invalid-numeric error; value is not persisted | Assumption |
 
 Do not automatically put negative numbers, letters, symbols, and decimal values into one class. Make them one partition only if the requirement and observed behavior treat them identically. If decimals are possible, add classes for accepted precision and unsupported precision.
 
 ### Example 3: Airline baggage pricing
 
-**Requirement assumption:** Let `t` be the number of hours remaining before scheduled departure. Payment more than 24 hours before departure receives a 50% discount. Payment from 24 hours up to, but not including, 3 hours before departure uses the basic tariff. Payment during the final three hours receives a 20% surcharge. Payment at or after departure is prohibited, and malformed time input is invalid.
+**Requirement assumption `REQ-EP-03`:** Let `t` be the number of hours remaining before scheduled departure. Payment more than 24 hours before departure receives a 50% discount. Payment from 24 hours up to, but not including, 3 hours before departure uses the basic tariff. Payment during the final three hours receives a 20% surcharge. Payment at or after departure is prohibited, and malformed time input is invalid. For the fixture, the basic tariff is `USD 100.00`, the discount is `USD 50.00`, and the surcharge is `USD 120.00`; accepted payment returns HTTP `200` and rejected payment returns HTTP `400`.
 
 The interval definitions are:
 
@@ -209,26 +208,27 @@ These classes are mutually exclusive and cover every numeric value of `t`; the m
 
 | Partition | Representative | Expected result |
 | --- | --- | --- |
-| P1: early payment (`t > 24`) | `30 hours` | Apply the 50% discount. |
-| P2: basic period (`3 < t <= 24`) | `10 hours` | Apply the basic tariff. |
-| P3: final three hours (`0 < t <= 3`) | `2 hours` | Apply the 20% surcharge. |
-| P4: departure reached or passed (`t <= 0`) | `0 hours` | Reject payment because departure has arrived or passed. |
-| P5: malformed/missing | `two hours` | Reject and show a time-format or required-field error. |
+| P1: early payment (`t > 24`) | `30 hours` | HTTP `200`; payment succeeds and final price is `USD 50.00`. |
+| P2: basic period (`3 < t <= 24`) | `10 hours` | HTTP `200`; payment succeeds and final price is `USD 100.00`. |
+| P3: final three hours (`0 < t <= 3`) | `2 hours` | HTTP `200`; payment succeeds and final price is `USD 120.00`. |
+| P4: departure reached or passed (`t <= 0`) | `0 hours` | HTTP `400`; reject payment with `Payment is unavailable after departure`; no payment is captured. |
+| P5: missing time | blank | HTTP `400`; return `TIME_REQUIRED`; no payment is captured. |
+| P6: malformed time | `two hours` | HTTP `400`; return `TIME_INVALID`; no payment is captured. |
 
 EP identifies these behavioral classes. BVA should additionally check values immediately below, at, and immediately above the `24`-hour and `3`-hour boundaries, while respecting the ownership of `24` and `3` in the requirement.
 
 ### Example 4: Date of birth
 
-**Requirement assumption:** The service accepts dates in `YYYY-MM-DD` format from `1900-01-01` through a fixed reference date, `2026-08-29`, inclusive. A date after the reference date is rejected. Impossible dates, malformed formats, and blank values have separate validation behavior.
+**Requirement assumption `REQ-EP-04` (Assumption):** The service accepts dates in `YYYY-MM-DD` format from `1900-01-01` through a fixed reference date, `2026-08-29`, inclusive. A date after the reference date is rejected. Impossible dates, malformed formats, and blank values have separate validation behavior. Accepted input returns HTTP `200` and persists the normalized date; every rejected input returns HTTP `400` and does not persist a date.
 
 | Partition | Definition | Representative | Expected result |
 | --- | --- | --- | --- |
-| P1: before supported history | Valid calendar date before `1900-01-01` | `1899-12-31` | Reject as outside the supported date range. |
-| P2: valid past date | Valid date in `[1900-01-01, 2026-08-29]` | `1990-05-20` | Accept and calculate/store the date of birth. |
-| P3: future date | Valid calendar date after `2026-08-29` | `2026-08-30` | Reject as a future date. |
-| P4: impossible date | A date that cannot exist in the calendar | `2026-02-30` | Reject as an invalid calendar date. |
-| P5: malformed format | A value that is not `YYYY-MM-DD` | `05/20/1990` | Reject as a format error. |
-| P6: blank/missing | No date supplied | blank | Reject as a required field. |
+| P1: before supported history | Valid calendar date before `1900-01-01` | `1899-12-31` | HTTP `400`; return `DATE_OUT_OF_RANGE`; no date is persisted. |
+| P2: valid past date | Valid date in `[1900-01-01, 2026-08-29]` | `1990-05-20` | HTTP `200`; return and persist normalized date `1990-05-20`. |
+| P3: future date | Valid calendar date after `2026-08-29` | `2026-08-30` | HTTP `400`; return `DATE_IN_FUTURE`; no date is persisted. |
+| P4: impossible date | A date that cannot exist in the calendar | `2026-02-30` | HTTP `400`; return `DATE_INVALID`; no date is persisted. |
+| P5: malformed format | A value that is not `YYYY-MM-DD` | `05/20/1990` | HTTP `400`; return `DATE_FORMAT_INVALID`; no date is persisted. |
+| P6: blank/missing | No date supplied | blank | HTTP `400`; return `DATE_REQUIRED`; no date is persisted. |
 
 If the product displays different behavior for age groups, such as child, adult, and senior eligibility, those groups can become additional partitions only after fixing the reference date and defining the age-calculation rule. The date-of-birth input and the calculated age are not automatically the same equivalence domain.
 

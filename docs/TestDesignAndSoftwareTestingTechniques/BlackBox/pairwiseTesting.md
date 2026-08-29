@@ -6,8 +6,6 @@ Pairwise Testing, also called **all-pairs testing** or **2-way combinatorial tes
 
 The technique addresses interaction defects while reducing the number of configurations compared with exhaustive testing. It does not prove that all values, all complete combinations, all requirements, all branches, all states, all higher-order interactions, or any non-functional property are correct.
 
-> This file was empty before this guide was authored. No rewrite of supplied source material is claimed.
-
 This guide uses ISTQB-consistent test-design terminology as a practical supplement. It is not a replacement for the current official ISTQB syllabus, product requirements, acceptance criteria, or project test strategy.
 
 ## Core principle
@@ -391,7 +389,17 @@ Add the targeted 3-way case:
 | --- | --- | --- | --- | --- |
 | `PW3-005` | Pro | fr-FR | On | HTTP `200 OK`; dashboard loads; French labels are displayed; `Pro`, `fr-FR`, and `MFA=On` persist unchanged. |
 
-Assign tuple ID `TUPLE-PLAN-LOCALE-MFA-Pro-fr-FR-On` to `PW3-005`. The complete 3-way universe has `2 × 2 × 2 = 8` tuples. The initial four rows cover `4 / 8 = 50%`; the four tuples missing before `PW3-005` are `Basic + en-US + On`, `Basic + fr-FR + Off`, `Pro + en-US + Off`, and `Pro + fr-FR + On` (the last is covered by `PW3-005`). After executing `PW3-005`, coverage is `5 / 8 = 62.5%` and only these three tuples remain: `Basic + en-US + On`, `Basic + fr-FR + Off`, and `Pro + en-US + Off`. Add those three rows, with IDs `PW3-006` through `PW3-008`, and report `8 / 8 = 100%` 3-way coverage. The three remaining tuple IDs are `TUPLE-PLAN-LOCALE-MFA-Basic-en-US-On`, `TUPLE-PLAN-LOCALE-MFA-Basic-fr-FR-Off`, and `TUPLE-PLAN-LOCALE-MFA-Pro-en-US-Off`.
+Assign tuple ID `TUPLE-PLAN-LOCALE-MFA-Pro-fr-FR-On` to `PW3-005`. The complete 3-way universe has `2 × 2 × 2 = 8` tuples. The initial four rows cover `4 / 8 = 50%`; the four tuples missing before `PW3-005` are `Basic + en-US + On`, `Basic + fr-FR + Off`, `Pro + en-US + Off`, and `Pro + fr-FR + On` (the last is covered by `PW3-005`). After executing `PW3-005`, coverage is `5 / 8 = 62.5%` and only these three tuples remain: `Basic + en-US + On`, `Basic + fr-FR + Off`, and `Pro + en-US + Off`.
+
+Add the following complete legal rows:
+
+| Test case ID | PLAN | LOCALE | MFA | Tuple ID | Exact oracle |
+| --- | --- | --- | --- | --- | --- |
+| `PW3-006` | Basic | en-US | On | `TUPLE-PLAN-LOCALE-MFA-Basic-en-US-On` | HTTP `200 OK`; dashboard loads; English labels are displayed; `Basic`, `en-US`, and `MFA=On` persist unchanged. |
+| `PW3-007` | Basic | fr-FR | Off | `TUPLE-PLAN-LOCALE-MFA-Basic-fr-FR-Off` | HTTP `200 OK`; dashboard loads; French labels are displayed; `Basic`, `fr-FR`, and `MFA=Off` persist unchanged. |
+| `PW3-008` | Pro | en-US | Off | `TUPLE-PLAN-LOCALE-MFA-Pro-en-US-Off` | HTTP `200 OK`; dashboard loads; English labels are displayed; `Pro`, `en-US`, and `MFA=Off` persist unchanged. |
+
+After executing `PW3-006` through `PW3-008`, report `8 / 8 = 100%` 3-way coverage. Each row is a complete legal extension and maps directly to its tuple ID.
 
 Choose 3-way or stronger testing when risk, defect history, architecture, or evidence indicates that three or more parameters can jointly cause failure. Use a decision table when the defect is an explicit combination of business conditions and actions, state-transition testing for lifecycle paths, and EP/BVA for missing behavioral classes or boundaries. Pairwise alone does not cover this higher-order defect.
 

@@ -199,16 +199,16 @@ The examples below are teaching models. Their product rules are **Assumptions** 
 
 ### Example 1: Verification-code validation
 
-**Requirement assumption `REQ-EG-01` (Assumption):** A six-digit code is valid for five minutes, may be used once, and returns HTTP `204` on success. Missing, malformed, wrong, or expired codes return HTTP `400` with an exact error code; a replay returns HTTP `409`. Three failed attempts suspend verification for ten minutes. A successful verification creates one audit event and marks the account verified.
+**Requirement assumption `REQ-EG-01` (Assumption):** A six-digit code is valid for five minutes, may be used once, and returns HTTP `204` on success. The service clock is UTC at one-second precision; expiration occurs when elapsed time is `>= 5:00`, so a code at exactly `t=5:00` is expired. Missing or blank codes return HTTP `400` with `CODE_REQUIRED`; malformed codes return HTTP `400` with `CODE_INVALID`; an expired code returns HTTP `400` with `CODE_EXPIRED`; a replay returns HTTP `409` with `CODE_REPLAY`. A wrong code is initially treated as `HTTP 400 CODE_INVALID`; wrong-code attempts one and two use that response, the third wrong-code attempt returns HTTP `423` with `VERIFICATION_SUSPENDED` and starts a ten-minute suspension, and further attempts during suspension return the same `423` response. A successful verification creates one audit event and marks the account verified. The reference instant is code issuance, and no verification or audit side effect occurs for rejected attempts.
 
-**Evidence:** `EG-EVID-01` (Assumption), a prior validation defect involving blank input; `EG-EVID-02` (Assumption), a checklist item for expiry and replay. **Area:** `EG-AREA-01`, code validation and attempt state. **Hypotheses:**
+**Evidence:** `EG-EVID-01` (Assumption), a prior validation defect involving blank input; `EG-EVID-02` (Assumption), a checklist item for expiry and replay; `EG-EVID-09` (Assumption), a rate-limit checklist item for failed-attempt suspension. **Area:** `EG-AREA-01`, code validation and attempt state. **Hypotheses:**
 
 | Hypothesis | Trigger | Predicted failure | Exact oracle | Priority |
 | --- | --- | --- | --- | --- |
 | `EG-HYP-01` | blank or whitespace code | validator accepts a non-code or returns a server error | HTTP `400`, body `code=CODE_REQUIRED`, no audit event, account remains unverified | High |
 | `EG-HYP-02` | valid code at `t=5:00` | expiry boundary is handled incorrectly | HTTP `400`, body `code=CODE_EXPIRED`; no verification or audit event | High |
 | `EG-HYP-03` | submit the valid code twice | replay creates a second verification or audit event | first request `204`; second request `409`, `code=CODE_REPLAY`; exactly one audit event | High |
-| `EG-HYP-04` | three wrong codes | failed-attempt counter or suspension is wrong | third response `401`; account status `suspended`; fourth attempt returns `423` for ten minutes | Medium |
+| `EG-HYP-04` | three sequential wrong codes followed by a fourth attempt during suspension | failed-attempt counter or suspension precedence is wrong | first and second responses `400 CODE_INVALID`; third response `423 VERIFICATION_SUSPENDED`; account status `suspended`; fourth attempt also returns `423 VERIFICATION_SUSPENDED`; no verification or audit event | Medium |
 
 **Setup and cases:** Create account `acct-100`, code `482731`, freeze the test clock, and use a unique request ID per submission. Submit exact blank, expiry-boundary, duplicate, and wrong-code requests. Capture response status/body, account state, audit-event count, and timestamps. Reset the account and clock after each case.
 
@@ -216,7 +216,7 @@ For the four selected hypotheses, 4/4 hypotheses were executed = **100% selected
 
 ### Example 2: Sorting and locale handling
 
-**Requirement assumption `REQ-EG-02` (Assumption):** A catalog API sorts `price` numerically in ascending order, preserves source order for equal prices, and uses locale `en-US` for names. The web UI must display the API order in supported Chrome and Safari versions.
+**Requirement assumption `REQ-EG-02` (Assumption):** A catalog API sorts `price` numerically in ascending order, preserves source order for equal prices, and uses locale `en-US` for names. Size labels use the domain order `XXS < XS < S < M < L < XL`, not lexical order. The web UI must display the API order in the declared supported browsers: Chrome 128 and Safari 18. This size ordering is an explicit teaching-model assumption, not a rule inferred from the evidence.
 
 **Evidence:** `EG-EVID-03` (Assumption), a historical defect where strings `1`, `10`, and `2` were sorted lexicographically; `EG-EVID-04` (Assumption), a support report about size labels. **Area:** `EG-AREA-02`, catalog ordering. **Hypotheses:**
 
@@ -224,32 +224,33 @@ For the four selected hypotheses, 4/4 hypotheses were executed = **100% selected
 - `EG-HYP-06` predicts that equal-price records are reordered rather than stable.
 - `EG-HYP-07` predicts that size labels are sorted alphabetically instead of by domain order.
 
-Use data `["1", "10", "2"]`, equal-price records with IDs `A` then `B`, and sizes `["XXS", "XS", "S", "M", "L", "XL"]`. In `en-US`, expect numeric order `1, 2, 10`; equal prices retain `A, B`; size order follows the confirmed domain rule. Compare API JSON order and UI order in the declared browser versions and capture locale, browser build, request, response, and rendered order.
+Use data `["1", "10", "2"]`, equal-price records with IDs `A` then `B`, and sizes `["XXS", "XS", "S", "M", "L", "XL"]`. In `en-US`, expect numeric order `1, 2, 10`; equal prices retain `A, B`; size order is `XXS, XS, S, M, L, XL` under `REQ-EG-02`. Compare API JSON order and UI order in Chrome 128 and Safari 18 and capture locale, browser build, request, response, and rendered order.
 
 Three selected hypotheses and three scenarios produce 3/3 = **100% selected-hypothesis coverage** and 3/3 = **100% scenario coverage** for this small inventory. One area and two evidence sources are represented, so area coverage is 1/1 = **100%** and evidence-source coverage is 2/2 = **100%**. This does not prove other locales, browsers, pagination, filters, nulls, dates, or all catalog data. Use EP for data classes, BVA for numeric limits, Pairwise for browser/locale combinations, and compatibility testing for the supported matrix.
 
 ### Example 3: API duplicate and timeout handling
 
-**Requirement assumption `REQ-EG-03` (Assumption):** `POST /payments` accepts an idempotency key and creates one payment. A valid new request returns `201` with payment ID and creates one ledger entry. Repeating the same key returns the same payment ID and does not create another entry. A timeout may occur after the provider accepts the payment; the client must safely retry and eventually observe one completed payment.
+**Requirement assumption `REQ-EG-03` (Assumption):** `POST /payments` accepts an idempotency key and creates one payment. A valid new request returns `201` with payment ID and creates one ledger entry. Repeating the same key returns the same payment ID and does not create another entry. A timeout may occur after the provider accepts the payment; the client must safely retry and eventually observe one completed payment. For the timeout fixture, the client timeout is `5s`, polling is allowed for `60s`, the provider receives exactly two calls, the first call charges once and delays its response, and the retry returns the original payment ID without another charge. The final payment status is `Succeeded`.
 
-**Evidence:** `EG-EVID-05` (Assumption), a prior incident involving duplicate charges; `EG-EVID-06` (Assumption), an integration timeout risk. **Area:** `EG-AREA-03`, payment boundary and retry handling. **Hypotheses:** `EG-HYP-08` predicts duplicate ledger entries after a retry; `EG-HYP-09` predicts a timeout retry creates a second provider charge.
+**Evidence:** `EG-EVID-05` (Assumption), a prior incident involving duplicate charges; `EG-EVID-06` (Assumption), an integration timeout risk; `EG-EVID-08` (Assumption), an API validation checklist item for malformed amounts. **Area:** `EG-AREA-03`, payment boundary and retry handling. **Hypotheses:** `EG-HYP-08` predicts duplicate ledger entries after a retry; `EG-HYP-09` predicts a timeout retry creates a second provider charge; `EG-HYP-11` predicts malformed amounts reach the provider or create local payment data.
 
-Create order `ord-200`, amount `19.95`, key `idem-200`, and a provider stub that accepts the first request but delays its response beyond the client timeout. Send the request, record the timeout, retry with the same key, then query payment status and the ledger. Expected result: at most one provider charge, one payment ID, one ledger entry for `19.95`, and a documented final status. A malformed amount case is separate and expects HTTP `400`, a precise error code, no provider call, and no ledger entry.
+Create order `ord-200`, amount `19.95`, key `idem-200`, and a provider stub matching `REQ-EG-03`. Send the request, record the client timeout at `5s`, retry with the same key, and poll for at most `60s`; then query payment status and the ledger. The exact oracle is: final payment status `Succeeded`; the same payment ID is returned for the original and retry requests; provider call count `2`; provider charge count `1`; exactly one ledger entry for `19.95`; one persisted payment record; and no duplicate notification or audit side effect. For `EG-TC-11`, submit amount `19.9x` with a new idempotency key: HTTP `400`, body `code=AMOUNT_INVALID`, provider call count `0`, payment-record count `0`, and ledger-entry count `0`.
 
-Three selected cases (malformed input, duplicate request, timeout retry) executed with outcomes give 3/3 = **100% scenario coverage**; the two hypotheses executed give 2/2 = **100% hypothesis coverage**. Negative coverage is 1/1 for the selected malformed category and regression-seed coverage is 1/1 for the duplicate-charge incident. These metrics do not cover concurrent keys, provider outages, all currencies, network partitions, or every payload representation.
+Three selected cases (`EG-TC-08` duplicate request, `EG-TC-09` timeout retry, and `EG-TC-11` malformed input) executed with outcomes give 3/3 = **100% scenario coverage**; the three selected hypotheses `EG-HYP-08`, `EG-HYP-09`, and `EG-HYP-11` give 3/3 = **100% hypothesis coverage**. Negative coverage is 1/1 for the selected malformed category and regression-seed coverage is 1/1 for `EG-REG-01` (the duplicate-charge incident). These metrics do not cover concurrent keys, provider outages, all currencies, network partitions, or every payload representation.
 
 ### Example 4: Historical production-defect regression
 
-**Evidence `EG-EVID-07` (Assumption):** Release `2.4.0` accepted phone input `+380991234567` only when its length was counted before normalization, returning a generic server error. The approved requirement `REQ-EG-04` (Assumption) says accepted international phone input is normalized to E.164 and invalid input receives HTTP `400` with `PHONE_INVALID`.
+**Evidence `EG-EVID-07` (Assumption):** Release `2.4.0` accepted phone input `+380991234567` only when its length was counted before normalization, returning a generic server error. The approved requirement `REQ-EG-04` (Assumption) says accepted international phone input returns HTTP `200` and is normalized to E.164; invalid input receives HTTP `400` with `PHONE_INVALID`. Define regression seed `EG-REG-01`, area `EG-AREA-04`, hypothesis `EG-HYP-10`, scenario `EG-TC-10`, and result `EG-RES-10` for this historical defect.
 
 Traceability:
 
 ```text
 EG-EVID-07 → EG-AREA-04 phone normalization → EG-HYP-10 length checked before normalization
-→ EG-TC-10 fixed regression input → EG-RES-10 observed response → regression status
+→ EG-REG-01 historical regression seed → EG-TC-10 fixed regression input
+→ EG-RES-10 observed response → regression result
 ```
 
-In the fixed build, create a test account, submit `+380991234567`, and verify HTTP `200`, normalized persisted value `+380991234567`, and no server error. Submit `380 99 123 45 67` as a related hypothesis only if the requirement confirms whitespace normalization; otherwise mark it `Question/TBD`. Capture build, request, response, database value, and defect reference. If the real record is unavailable, all release and behavior details remain Assumptions until confirmed.
+In the fixed build, create a test account, submit `+380991234567`, and verify HTTP `200`, normalized persisted value `+380991234567`, and no server error. This is the exact oracle for `EG-HYP-10`; the expected-versus-actual comparison is recorded in `EG-RES-10`. Submit `380 99 123 45 67` as a related scenario only if the requirement confirms whitespace normalization; otherwise assign it a new `Question/TBD` hypothesis rather than treating it as part of `EG-TC-10`. Capture build, request, response, database value, and defect reference. If the real record is unavailable, all release and behavior details remain Assumptions until confirmed.
 
 One selected regression seed executed gives 1/1 = **100% historical-regression coverage** and one selected hypothesis executed gives 1/1 = **100% hypothesis coverage**. It covers this seed only, not every phone format, country, encoding, client, or normalization defect. Add EP/BVA cases for format and length classes and compatibility cases for supported clients.
 

@@ -55,7 +55,7 @@ Use these definitions when the guide is unavailable:
 - **Transition-pair/sequence coverage** — coverage of selected consecutive transition pairs or sequences.
 - **Path coverage** — coverage of explicitly selected paths, not an implicit claim to cover every possible path.
 
-Recommended label notation is `T-001: event | [guard] | action | Source -> Destination`. Use stable state and transition IDs, a marked initial state, terminal markers, and a legend for event, guard, action, validity, and status notation. If diagram rendering is unavailable, provide a plain-text diagram and an authoritative transition table. State whether the table is exhaustive, reduced, positive-only, or augmented-invalid; preserve guards, constraints, exact oracles, exclusions, and covered case IDs in the table.
+Recommended label notation is `T-001: event | [guard] | action | Source -> Destination`. Use stable state and transition IDs, a marked initial state, terminal markers, and a legend for event, guard, action, validity, and status notation. If diagram rendering is unavailable, provide a plain-text diagram and an authoritative transition table. State whether the table is exhaustive, reduced, positive-only, or augmented-invalid; preserve guards, constraints, exact oracles, exclusions, and covered case IDs in the table. Treat terminal, duplicate, stale, and late events as separate modeled IDs when they have distinct applicability or oracles.
 
 ## Input contract
 

@@ -20,7 +20,7 @@ Treat Pairwise Testing as a black-box, specification-based, combinatorial test-d
 
 For every two **distinct** parameters, 2-way testing requires every required legal pair of levels to appear in at least one legal complete configuration/test row. A covering array is a set of rows designed to provide this interaction coverage; it need not be balanced. Pairwise reduces redundant configurations, but it does not prove that every value, complete combination, requirement, branch, state, higher-order interaction, or non-functional property is defect-free.
 
-Pairwise is not Equivalence Partitioning (EP) Each Choice Coverage, Boundary Value Analysis (BVA), decision-table coverage, state-transition coverage, full Cartesian coverage, branch coverage, security testing, performance testing, accessibility testing, or exploratory testing. Use EP to identify behaviorally meaningful classes and BVA to select boundary representatives before combining factors.
+Pairwise is not Equivalence Partitioning (EP) or Each Choice Coverage, Boundary Value Analysis (BVA), decision-table coverage, state-transition coverage, full Cartesian coverage, branch coverage, security testing, performance testing, accessibility testing, or exploratory testing. Use EP to identify behaviorally meaningful classes and BVA to select boundary representatives before combining factors.
 
 ## Input contract
 

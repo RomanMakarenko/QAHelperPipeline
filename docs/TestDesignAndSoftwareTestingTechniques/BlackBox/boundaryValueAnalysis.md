@@ -33,7 +33,7 @@ For example, EP can identify the valid integer partition `[1,1000]`, the below-r
 | **Valid side** | The partition whose values satisfy the relevant rule. A boundary itself is on this side only when the endpoint is inclusive. |
 | **Invalid side** | A partition whose values violate the relevant rule and should produce a defined rejection or error behavior. |
 | **2-value BVA** | Selects the nearest representable values on the two sides of a boundary. Use it when the boundary value is already covered elsewhere or when the project explicitly chooses this reduced variant. |
-| **3-value BVA** | Selects the value below, the boundary value, and the value above a boundary. This guide uses 3-value BVA in the worked examples. |
+| **3-value BVA** | Selects the value below, the boundary value, and the value above a boundary. The worked examples use **3-value robust BVA** when the below/above values are representable invalid-side inputs; otherwise classify the set as normal BVA and test invalid representations separately. |
 | **Boundary coverage** | The proportion of required boundary positions exercised by the test cases. It is distinct from partition coverage and from full combination coverage. |
 | **Oracle** | The precise observable result used to determine pass or fail, such as acceptance, a validation message, an HTTP status, a calculated tariff, persistence, or a state change. |
 
@@ -142,7 +142,7 @@ The relevant partitions are:
 | `QUANTITY-P2` | `1 <= x <= 1000` | Valid | Accept; persist the submitted integer unchanged. |
 | `QUANTITY-P3` | `x > 1000` for integer `x` | Invalid | Reject; show `Quantity must not exceed 1000`; do not persist the submission. |
 
-**Selected variant:** 3-value BVA with an increment of one integer. The two finite boundaries are `1` and `1000`.
+**Selected variant:** 3-value robust BVA with an increment of one integer. The two finite boundaries are `1` and `1000`; the below/above values are representable out-of-range integers and therefore intentionally exercise invalid-side behavior.
 
 | Boundary ID | Adjacent partitions | Formal boundary | Endpoint ownership | Values and positions | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -172,7 +172,7 @@ The malformed value `abc` is not “just above” or “just below” a numeric 
 
 If the product counts grapheme clusters or UTF-8 bytes instead, replace the test data and recompute the neighboring values. That is a requirement question, not an implementation detail that can be guessed safely.
 
-**Selected variant:** 3-value BVA; the increment is one Unicode code point.
+**Selected variant:** 3-value robust BVA; the increment is one Unicode code point, and the selected below/above lengths are representable invalid-side values.
 
 | Boundary ID | Adjacent partitions | Formal boundary | Endpoint ownership | Values and positions | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -181,7 +181,7 @@ If the product counts grapheme clusters or UTF-8 bytes instead, replace the test
 
 The partitions are:
 
-- `USERNAME-P1`: normalized length `< 6`, invalid;
+- `USERNAME-P1`: trimmed value is non-empty and normalized length `< 6`, invalid;
 - `USERNAME-P2`: normalized length `[6,15]`, valid;
 - `USERNAME-P3`: normalized length `> 15`, invalid;
 - `USERNAME-P4`: trimmed value is empty, invalid required-field case (EP/format coverage, not a length position in this example).
@@ -225,15 +225,16 @@ The partitions are:
 | `BAGGAGE-P2` | `3:00 < t <= 24:00` | Payment succeeds and final price is `100.00`. |
 | `BAGGAGE-P3` | `0:00 < t <= 3:00` | Payment succeeds and final price is `120.00`. |
 | `BAGGAGE-P4` | `t <= 0:00` | Payment is rejected with `Payment is unavailable after departure`; no payment is captured. |
-| `BAGGAGE-P5` | Missing or malformed time representation | Request is rejected with the applicable required-field or time-format error. |
+| `BAGGAGE-P5` | Missing time representation | Request is rejected with HTTP `400` and `TIME_REQUIRED`; no payment is captured. |
+| `BAGGAGE-P6` | Present but malformed time representation | Request is rejected with HTTP `400` and `TIME_INVALID`; no payment is captured. |
 
-**Selected variant:** 3-value BVA with one minute as the smallest meaningful increment. The boundary inventory includes both tariff transitions (`24:00`, `3:00`) and the outer departure boundary (`0:00`). A negative duration is included only if the interface can represent it.
+**Selected variant:** 3-value robust BVA with one minute as the smallest meaningful increment. The boundary inventory includes both tariff transitions (`24:00`, `3:00`) and the outer departure boundary (`0:00`). The negative-side value is represented explicitly as signed duration `t = -1 minute` and is conditional on the interface accepting signed durations; otherwise cover the post-departure partition with a supported timestamp representation.
 
 | Boundary ID | Adjacent partitions | Formal boundary and ownership | Selected values | Expected behavior | Status |
 | --- | --- | --- | --- | --- | --- |
 | `BAGGAGE-B1` | `BAGGAGE-P1` / `BAGGAGE-P2` | `24:00`; exact value belongs to `P2` | `23:59` below / `24:00` at / `24:01` above | Basic / basic / discount | Assumptions A2–A3 |
 | `BAGGAGE-B2` | `BAGGAGE-P2` / `BAGGAGE-P3` | `3:00`; exact value belongs to `P3` | `2:59` below / `3:00` at / `3:01` above | Surcharge / surcharge / basic | Assumptions A2–A3 |
-| `BAGGAGE-B3` | `BAGGAGE-P3` / `BAGGAGE-P4` | `0:00`; exact value belongs to invalid `P4` | `-0:01` below / `0:00` at / `0:01` above | Reject / reject / surcharge | Assumptions A2–A3; negative input must be representable |
+| `BAGGAGE-B3` | `BAGGAGE-P3` / `BAGGAGE-P4` | `0:00`; exact value belongs to invalid `P4` | `t = -1 minute` below / `0:00` at / `0:01` above | Reject / reject / surcharge | Assumptions A2–A3; the signed-duration representation is required for the below case |
 
 “Below” and “above” in the table refer to the numeric value of `t` (hours remaining), not the chronological direction of the clock. At the 24-hour boundary, `24:01` is numerically above `24:00` and belongs to the discount class; `23:59` is numerically below it and remains basic. To avoid this common ambiguity, each case below states its tariff explicitly.
 
@@ -251,7 +252,7 @@ The partitions are:
 | `BVA-B-006` | `BAGGAGE-B2` | Verify payment just later than three hours | High | `2:59` | Submit prepayment with `t = 2:59`. | Payment succeeds with the 20% surcharge; final price is exactly `120.00`. | below | `BAGGAGE-P3` | Less time remains than three hours. |
 | `BVA-B-007` | `BAGGAGE-B3` | Verify one minute before departure | High | `0:01` | Submit prepayment with `t = 0:01`; inspect the calculated price. | Payment succeeds with the 20% surcharge; final price is exactly `120.00`. | above | `BAGGAGE-P3` | The service accepts positive remaining time. |
 | `BVA-B-008` | `BAGGAGE-B3` | Verify exact departure-time endpoint | Critical | `0:00` | Submit prepayment with `t = 0:00`. | Payment is rejected with `Payment is unavailable after departure`; no payment is captured. | at | `BAGGAGE-P4` | Exact zero is invalid by A2. |
-| `BVA-B-009` | `BAGGAGE-B3` | Verify time after departure | High | `-0:01` | Submit prepayment with `t = -0:01`. | Payment is rejected with `Payment is unavailable after departure`; no payment is captured. | below | `BAGGAGE-P4` | Execute only if negative durations are representable. |
+| `BVA-B-009` | `BAGGAGE-B3` | Verify one minute after departure | High | `t = -1 minute` | Submit prepayment with signed duration `t = -1 minute`. | Payment is rejected with `Payment is unavailable after departure`; no payment is captured. | below | `BAGGAGE-P4` | Execute only when signed durations are representable; otherwise replace with the nearest supported post-departure timestamp. |
 
 The six cases around `24:00` and `3:00` correspond to the two tariff transitions. The three cases around `0:00` cover the outer invalid boundary when negative time can be represented. The source's Class 2 label for a 30-hour example is incorrect: `30:00` belongs to `BAGGAGE-P1` and receives the discount. A nominal EP case such as `10:00` should additionally verify the interior basic partition; it is not a boundary position.
 
@@ -260,6 +261,8 @@ The six cases around `24:00` and `3:00` correspond to the two tariff transitions
 ### Cutoff requirement and boundary model
 
 **Assumption D1:** A report submission is accepted through `2026-08-29T17:00:00Z`, inclusive. The service interprets timestamps in UTC, accepts ISO 8601 timestamps with second precision, and compares the instant rather than the displayed local date. A timestamp after the cutoff is rejected with HTTP `409 Conflict` and `Submission window has closed`; an accepted request returns HTTP `202 Accepted` and stores the normalized UTC timestamp.
+
+**Selected variant:** 3-value normal BVA for the valid submission window, with the above-cutoff rejection retained as the explicitly modeled invalid-side oracle.
 
 The relevant boundary is:
 
@@ -375,7 +378,7 @@ Before approving a BVA test design, confirm:
 - [ ] The input unit, discrete increment, decimal precision, date/time precision, and rounding rules are stated.
 - [ ] Date/time tests state the reference date or instant, time zone, endpoint rule, and DST assumptions where relevant.
 - [ ] String tests state whether length means characters, graphemes, or bytes and address normalization where relevant.
-- [ ] The selected BVA variant is explicitly named as 2-value or 3-value.
+- [ ] The selected BVA variant is explicitly named as 2-value or 3-value and its normal or robust scope is stated.
 - [ ] Each 3-value boundary has a value labeled `below`, `at`, and `above`; each 2-value boundary has its two selected positions recorded.
 - [ ] Every selected value is representable and belongs to the expected side or partition.
 - [ ] Preconditions, complete input data, actions, priority, and exact oracles are executable.

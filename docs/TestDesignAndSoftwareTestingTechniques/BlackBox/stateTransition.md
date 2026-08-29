@@ -182,8 +182,8 @@ Example plain-text diagram:
 S1 -- T1 submit / A1 persist --> S2 Submitted
 S2 -- T2 start / A2 enqueue --> S3 InProgress
 S3 -- T3 complete / A3 finalize --> S4 Completed
-S3 -- T6 failure / A6 record error --> S6 Failed
-S6 -- T7 retry / A7 increment attempt --> S3
+S3 -- T6 failure / A5 record error --> S6 Failed
+S6 -- T7 retry / A6 increment attempt --> S3
 S4 --> [*]
 ```
 
@@ -375,6 +375,8 @@ Outside scope: all SKU and quantity partitions, payment behavior, concurrent can
 | `C21` | Only the owner may submit or reopen | `G21`, `T21`, `T24` | Non-owner attempts are forbidden | Assumption |
 | `C22` | Approval requires authority and a non-owner actor | `G22`, `G23`, `T22`, `T25`, `T26` | Failed guard returns HTTP 403 and leaves the document unchanged | Assumption |
 
+**Transition classification:** `T25` and `T26` are invalid attempts because the approval guards fail; `T27` is a forbidden event because a non-owner actor is prohibited from reopening. They remain in the selected-negative denominator together, but their classifications and guard failures are distinct.
+
 **Transition table** — reduced, positive-and-selected-negative table for the declared four-state workflow; it is not exhaustive over every state/event/role combination. Selected invalid cases are included.
 
 | ID | Source | Event | Guards | Action/effect | Destination | Status | Constraint IDs | Exact oracle |
@@ -383,9 +385,9 @@ Outside scope: all SKU and quantity partitions, payment behavior, concurrent can
 | `T22` | `S22` | Approve | `G22=true`, `G23=true` | `A22` | `S23` | Valid | `C22` | HTTP 200; state `Approved`; approval audit names actor |
 | `T23` | `S22` | Reject | `G22=true` | `A23` | `S24` | Valid | `C22` | HTTP 200; state `Rejected`; exact reason persisted |
 | `T24` | `S24` | Reopen | `G21=true` | `A24` | `S21` | Valid | `C21` | HTTP 200; state `Draft`; reopen audit written |
-| `T25` | `S22` | Approve | `G22=false` | None | `S22` | Invalid/forbidden | `C22` | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external-side-effect mutation |
-| `T26` | `S22` | Approve | `G22=true`, `G23=false` | None | `S22` | Invalid/forbidden | `C22` | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external-side-effect mutation |
-| `T27` | `S24` | Reopen | `G21=false` | None | `S24` | Invalid/forbidden | `C21` | HTTP 403 `OWNER_REQUIRED`; rejection reason and all side effects unchanged |
+| `T25` | `S22` | Approve | `G22=false` | None | `S22` | Invalid | `C22` | HTTP 403 `APPROVER_REQUIRED`; no state, persistence, audit, notification, or external-side-effect mutation |
+| `T26` | `S22` | Approve | `G22=true`, `G23=false` | None | `S22` | Invalid | `C22` | HTTP 403 `SELF_APPROVAL_FORBIDDEN`; no state, persistence, audit, notification, or external-side-effect mutation |
+| `T27` | `S24` | Reopen | `G21=false` | None | `S24` | Forbidden | `C21` | HTTP 403 `OWNER_REQUIRED`; rejection reason and all side effects unchanged |
 
 **Cases and coverage**
 
@@ -396,6 +398,7 @@ Outside scope: all SKU and quantity partitions, payment behavior, concurrent can
 | `ST2-03` | `Q22=(T21,T23,T24)` | `D-203`; owner `u1`; authorized approver `u2`; rejection reason `missing-signature` | Submit, reject, owner reopens; states `S21->S22->S24->S21`; exact reason and audits | `T21,T23,T24` |
 | `ST2-04` | `T25` | `D-204` in `S22`; actor `u3` lacks authority | Approve; HTTP 403 `APPROVER_REQUIRED`; state and audit unchanged | `T25,G22=false` |
 | `ST2-05` | `T26` | `D-205` in `S22`; owner `u1` is authorized approver | Approve as owner; HTTP 403 `SELF_APPROVAL_FORBIDDEN`; state and audit unchanged | `T26,G22=true,G23=false` |
+| `ST2-06` | `T27` | `D-206` in `S24`; owner `u1`; rejection reason `missing-signature`; actor `u3` is not the owner | Attempt reopen as `u3`; HTTP 403 `OWNER_REQUIRED`; state remains `S24`; rejection reason, persistence, audit, notification, and external side effects are unchanged | `T27,G21=false,C21` |
 
 Coverage arithmetic:
 
@@ -410,15 +413,15 @@ The role, authority, and self-approval rules are Assumptions. EP should partitio
 
 **Requirement basis — Assumption.** One payment is submitted to an external provider. A success callback succeeds the payment. A failure or timeout can retry while the attempt count is below three. At attempt three, timeout expires the payment and failure reaches terminal failure. The exact callback and API behavior below is provisional.
 
-**Model metadata:** model `PAYMENT-ST-1.1`; requirement `REQ-PAYMENT-LIFECYCLE-ASSUMED-1`; manual cases; UTC service clock; second precision; callback ordering and eventual consistency are `Question/TBD`.
+**Model metadata:** model `PAYMENT-ST-1.1`; requirement `REQ-PAYMENT-LIFECYCLE-ASSUMED-1`; manual cases; UTC service clock; second precision; callback ordering and eventual consistency are `Question/TBD`. `T36` remains excluded from valid-transition execution coverage until its provider-cancellation contract is confirmed.
 
 **Event model**
 
 | Event ID | Source | Payload/applicability | Duplicate/order/retry behavior | Status |
 | --- | --- | --- | --- | --- |
 | `E31` | User | Payment ID, amount, currency, provider reference; applicable in `S31` | One submission for this model; duplicate submission is Residual risk | Assumption |
-| `E32` | External callback | Payment ID, attempt ID, success result; applicable in `S32` | Matching callback may arrive once; duplicate behavior is selected in `DUP31` | Assumption |
-| `E33` | External callback | Payment ID, attempt ID, failure reason; applicable in `S32` | Failure callback may trigger retry below attempt 3 | Assumption |
+| `E32` | External callback | Payment ID, attempt ID, success result; ordinary applicability in `S32`; selected late/duplicate applicability is modeled separately in terminal scenarios `DUP31` and `STALE31` | Matching callback may arrive once; duplicate terminal behavior is selected separately in `DUP31`, and late success after expiration in `STALE31` | Assumption |
+| `E33` | External callback | Payment ID, attempt ID, failure reason; ordinary applicability in `S32`; selected duplicate applicability is modeled separately in terminal scenario `TERM35` | Failure callback may trigger retry below attempt 3; terminal duplicate behavior is selected separately in `TERM35` | Assumption |
 | `E34` | Timer | Payment ID, attempt ID, elapsed time; applicable in `S32` | Timer competes with callbacks at the boundary | Assumption |
 | `E35` | Scheduled retry job | Payment ID, next attempt time; applicable in `S33` | Job is due only after retry delay; duplicate job is Residual risk | Assumption |
 
@@ -475,7 +478,7 @@ The role, authority, and self-approval rules are Assumptions. EP should partitio
 | `T33` | `S32` | `E33 failure-callback` / provider | `G32=true`, `G33=true` | `A33` record failure and enqueue retry | `S33` | Valid | `C32,C33` | HTTP 200 acknowledgement; state `Retrying`; failure recorded; no capture |
 | `T34` | `S33` | `E35 retry-job` / scheduler | `G35=true` | `A34` increment attempt and submit | `S32` | Valid | `C34` | Attempt increments exactly once; state `Pending`; one provider request |
 | `T35` | `S32` | `E34 timeout` / timer | `G34=true`, `G33=true` | `A35` record timeout and enqueue retry | `S33` | Valid | `C33,C35` | Timeout record persisted; state `Retrying`; no capture |
-| `T36` | `S32` | `E34 timeout` / timer | `G34=true`, `G33=false` | `A36` expire payment | `S36` | Valid | `C35,C36` | State `Expired`; no capture; provider cancellation policy is `Question/TBD` |
+| `T36` | `S32` | `E34 timeout` / timer | `G34=true`, `G33=false` | `A36` expire payment | `S36` | Question/TBD — blocked pending provider-cancellation contract | `C35,C36` | Local state would become `Expired` with no capture, but provider cancellation action and final side-effect oracle are unspecified |
 | `T37` | `S32` | `E33 failure-callback` / provider | `G32=true`, `G33=false` | `A37` finalize failure | `S35` | Valid | `C32,C36` | HTTP 200 acknowledgement; state `Failed`; no retry or capture |
 
 **Terminal and robustness behavior**
@@ -483,7 +486,7 @@ The role, authority, and self-approval rules are Assumptions. EP should partitio
 - `TERM35`: a duplicate failure callback received in `S35` is an Assumption with HTTP 409 `PAYMENT_ALREADY_FAILED`; state, failure reason, audit, retry count, and capture count remain unchanged.
 - `DUP31`: a duplicate success callback received in `S34` is an Assumption with HTTP 200 `already_succeeded`; state, capture count, audit count, and external capture calls remain unchanged.
 - `STALE31`: a late success callback received in `S36` is an Assumption with HTTP 409 `PAYMENT_EXPIRED`; state and capture remain unchanged.
-- Callbacks in `S33`, mismatched callback IDs, early retry jobs, and pre-boundary timers are `Question/TBD`; do not classify them as invalid until the contract defines their exact oracle.
+- Callbacks in `S33`, mismatched callback IDs, early retry jobs, and pre-boundary timers are `Question/TBD`; do not classify them as invalid until the contract defines their exact oracle. The terminal and late-event IDs above are selected scenario elements with explicit provisional oracles, not members of the ordinary `E32`/`E33` applicability domain.
 
 **Robustness cases**
 
@@ -494,13 +497,13 @@ The role, authority, and self-approval rules are Assumptions. EP should partitio
 | `ST3-03` | `Q33=(T31,T35,T34,T35,T34,T36)` | Create `P-303`; timeout attempts 1 and 2; retry to attempt 3; timeout at 30s | States end `S36`; no fourth attempt, no capture, expiration persisted |
 | `ST3-04` | `Q34=(T31,T35,T34,T35,T34,T37)` | Create `P-304`; arrange two failures and retry jobs; fail attempt 3 | State `S35`; exact failure reason; no retry and no capture |
 | `ST3-05` | `DUP31` | Complete `P-305` to `S34`; deliver the same success callback again | **Assumption:** HTTP 200 `already_succeeded`; state, capture count, and audit count unchanged |
-| `ST3-06` | `STALE31` | Complete `P-306` to `S36`; deliver a late success callback | **Assumption:** HTTP 409 `PAYMENT_EXPIRED`; state and capture unchanged; provider ordering policy remains Question/TBD |
+| `ST3-06` | `STALE31` | Create `P-306` in `S31`; submit; at attempt 1 timeout at exactly 30s; run the due retry job; at attempt 2 timeout at exactly 30s; run the due retry job; at attempt 3 timeout at exactly 30s; verify `S36`; deliver a late success callback | **Assumption:** HTTP 409 `PAYMENT_EXPIRED`; state and capture unchanged; provider ordering policy remains Question/TBD |
 
 Coverage arithmetic:
 
 - Reachable states: `S31-S36`, `6/6 = 100%`.
-- Valid transitions: `T31-T37`, `7/7 = 100%`.
-- Event IDs: `E31-E35`, `5/5 = 100%`.
+- Valid transitions: `T31-T35` and `T37`, `6/6 = 100%`; `T36` is excluded from the valid executed denominator because its provider-cancellation oracle is Question/TBD.
+- Event IDs: `E31-E35`, `5/5 = 100%` for the ordinary model; `DUP31`, `TERM35`, and `STALE31` are separately selected robustness event IDs.
 - Selected timeout/retry scenarios: first timeout, retry-to-success, and exhausted timeout, `3/3 = 100%`.
 - Selected duplicate/stale scenarios: `DUP31, STALE31`, `2/2 = 100%`.
 - Selected sequences: `Q31,Q32,Q33,Q34`, `4/4 = 100%`.
@@ -526,9 +529,9 @@ The exact duplicate, stale-callback, provider cancellation, callback ordering, q
 | `T41` | `S41` | `E41 start-edit` / user | Editing permission | `A41` open edit session | `S42` | Valid | HTTP 200; state `S42`; one edit audit |
 | `T42` | `S42` | `E42 save` / user | Valid draft | `A42` persist draft | `S42` | Valid/self-loop | HTTP 200; state remains `S42`; draft version increments once |
 | `T43` | `S42` | `E43 submit` / user | Complete draft | `A43` finalize submission | `S43` | Valid | HTTP 202; state `S43`; one submission audit |
-| `T44` | `S41` | `E43 submit` / user | Editing required | None | `S41` | Invalid/forbidden | HTTP 409 `EDITING_REQUIRED`; no persistence, audit, notification, or submission invocation |
+| `T44` | `S41` | `E43 submit` / user | Editing required | None | `S41` | Forbidden (selected negative) | HTTP 409 `EDITING_REQUIRED`; no persistence, audit, notification, or submission invocation |
 
-**Actions/events:** `E41` starts editing and invokes `A41`; `E42` saves valid draft data and invokes `A42`; `E43` submits complete data and invokes `A43`. `C41` requires editing before submission. All are Confirmed within this teaching model.
+**Actions/events and constraints:** `E41` starts editing and invokes `A41`; `E42` saves valid draft data and invokes `A42`; `E43` submits complete data and invokes `A43`. `C41` is the explicit constraint `S41 ∧ E43 ⇒ reject because editing is required`; its exact oracle is HTTP `409` `EDITING_REQUIRED`, state unchanged, and no persistence, audit, notification, or submission invocation. The event, action, and constraint IDs are all defined in this inventory and are Confirmed within this teaching model.
 
 Selected pairs and sequence:
 

@@ -110,7 +110,7 @@ For an integer range `[L,U]` with increment `1`, 3-value BVA normally selects:
 - Lower boundary: `L-1` (**below**), `L` (**at**), `L+1` (**above**)
 - Upper boundary: `U-1` (**below**), `U` (**at**), `U+1` (**above**)
 
-For `[1,1000]`, this is `0, 1, 2` and `999, 1000, 1001`. Values outside the accepted range may be invalid-side tests; do not confuse them with malformed input.
+For `[1,1000]`, this is `0, 1, 2` and `999, 1000, 1001`. When the invalid-side values are representable and intentionally included, label this **3-value robust BVA**; a normal design may keep invalid-side behavior as separate EP/negative coverage. Do not confuse representable out-of-range numbers with malformed input.
 
 ### Exclusive endpoints and transitions
 

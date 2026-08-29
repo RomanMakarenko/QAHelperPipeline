@@ -272,7 +272,7 @@ The candidate Cartesian size is `2 × 2 = 4`. All combinations are feasible, so 
 
 ### Assumed requirement and domains
 
-**Assumption E2-1:** `POST /orders/preview` accepts an order whose spend for the current calendar month is measured in USD to cents. The buyback percentage is measured to two decimal places. The service returns a preview and does not persist an order. Every declared combination is legal.
+**Assumption E2-1:** `POST /orders/preview` accepts an order whose spend for the current calendar month is a non-negative USD amount measured to cents. The buyback percentage is a value in `[0%,100%]` measured to two decimal places. The service returns a preview and does not persist an order. Every declared combination is legal. For every case, use the same order fixture: merchandise subtotal `USD 100.00`, shipping charge `USD 0.00`, and tax `10%` applied after the discount. The expected preview total is `round((100.00 × (1 - discountPercent / 100)) × 1.10, 2)`, using decimal arithmetic and half-up rounding.
 
 | Condition ID | Meaning and formal entries | Status |
 | --- | --- | --- |
@@ -290,11 +290,11 @@ Actions and exact values:
 | `ACTION-22` | Free item quantity | `B1 → 0`; `B2 → 2`; `B3 → 5`; `B4 → 10` |
 | `ACTION-23` | Shipping method | `STANDARD` when free items `<5`; `FREE_STANDARD` when free items `>=5` |
 
-The exact positive oracle is HTTP `200`; JSON fields `discountPercent`, `freeItemQuantity`, and `shippingMethod` equal the action entries; the preview total is calculated from the submitted order, discount, and tax rules to cents; and no order record is persisted.
+The exact positive oracle is HTTP `200`; JSON fields `discountPercent`, `freeItemQuantity`, and `shippingMethod` equal the action entries; `previewTotal` equals the fixture formula in E2-1 (`USD 110.00` at `0%`, `USD 104.50` at `5%`, `USD 99.00` at `10%`, or `USD 93.50` at `15%`); and no order record is persisted.
 
 ### Candidate space and reduction
 
-The unchecked candidate Cartesian size is `4 × 4 × 2 = 32`. **Assumption E2-2:** all 32 candidates are feasible. Reduction is safe only for `S1` and `S2`: for every buyback tier and either loyalty value, the complete action vector is identical (`0%`, the buyback quantity, and the derived shipping method). Therefore loyalty is `-` only in those eight concrete expansions. Loyalty remains explicit for `S3` and `S4` because it changes `ACTION-21`; buyback remains explicit because it changes `ACTION-22` and possibly `ACTION-23`.
+The unchecked candidate Cartesian size is `4 × 4 × 2 = 32`. **Assumption E2-2:** all 32 candidates are feasible. Reduction is safe only for `S1` and `S2`: for every buyback tier and either loyalty value, the complete action vector is identical (`0%`, the buyback quantity, the derived shipping method, the calculated preview total under the same order/tax fixture, and no persistence). Therefore loyalty is `-` only in those eight concrete expansions. Loyalty remains explicit for `S3` and `S4` because it changes `ACTION-21`; buyback remains explicit because it changes `ACTION-22` and possibly `ACTION-23`. The separate `S1` and `S2` rule IDs are intentional non-maximal minimization: they preserve spend-tier traceability even though some action vectors are equivalent across those tiers.
 
 The reduced inventory contains 24 rules: 4 for `S1` with loyalty `-`, 4 for `S2` with loyalty `-`, 8 singleton rules for `S3`, and 8 singleton rules for `S4`.
 
@@ -320,34 +320,34 @@ The same proof applies to `R2-02` through `R2-08`: each expands over `LOYALTY_ME
 
 ### Executable reduced-rule cases
 
-Common preconditions: the preview endpoint is available; an authorized customer and a new order payload exist; monthly spend and loyalty status are established before the call; no order is persisted by preview. In every row, choose a concrete amount inside the stated tier and a concrete percentage inside the stated buyback tier, not an unverified endpoint.
+Common preconditions: the preview endpoint is available; an authorized customer and the fixed order fixture from E2-1 are available; monthly spend and loyalty status are established before the call; no order is persisted by preview. In every row, choose a concrete amount inside the stated tier and a concrete percentage inside the stated buyback tier, not an unverified endpoint; assert the numeric `previewTotal` specified by the discount outcome.
 
 | Test case ID | Rule ID | Complete representative inputs (`spend`, `buyback`, `loyalty`) | Exact expected result |
 | --- | --- | --- | --- |
-| `DT2-001` | `R2-01` | `USD 50.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total is exact to cents; no persistence |
-| `DT2-002` | `R2-02` | `USD 50.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact; no persistence |
-| `DT2-003` | `R2-03` | `USD 50.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact; no persistence |
-| `DT2-004` | `R2-04` | `USD 50.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact; no persistence |
-| `DT2-005` | `R2-05` | `USD 250.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total exact; no persistence |
-| `DT2-006` | `R2-06` | `USD 250.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact; no persistence |
-| `DT2-007` | `R2-07` | `USD 250.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact; no persistence |
-| `DT2-008` | `R2-08` | `USD 250.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact; no persistence |
-| `DT2-009` | `R2-09` | `USD 750.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-010` | `R2-10` | `USD 750.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-011` | `R2-11` | `USD 750.00`, `50.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-012` | `R2-12` | `USD 750.00`, `90.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-013` | `R2-13` | `USD 750.00`, `2.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-014` | `R2-14` | `USD 750.00`, `10.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-015` | `R2-15` | `USD 750.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-016` | `R2-16` | `USD 750.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-017` | `R2-17` | `USD 1,500.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-018` | `R2-18` | `USD 1,500.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-019` | `R2-19` | `USD 1,500.00`, `50.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-020` | `R2-20` | `USD 1,500.00`, `90.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-021` | `R2-21` | `USD 1,500.00`, `2.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-022` | `R2-22` | `USD 1,500.00`, `10.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; total exact to cents; no persistence |
-| `DT2-023` | `R2-23` | `USD 1,500.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
-| `DT2-024` | `R2-24` | `USD 1,500.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; total exact to cents; no persistence |
+| `DT2-001` | `R2-01` | `USD 50.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-002` | `R2-02` | `USD 50.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-003` | `R2-03` | `USD 50.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-004` | `R2-04` | `USD 50.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-005` | `R2-05` | `USD 250.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-006` | `R2-06` | `USD 250.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-007` | `R2-07` | `USD 250.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-008` | `R2-08` | `USD 250.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=0`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 110.00`; no persistence |
+| `DT2-009` | `R2-09` | `USD 750.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 104.50`; no persistence |
+| `DT2-010` | `R2-10` | `USD 750.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 104.50`; no persistence |
+| `DT2-011` | `R2-11` | `USD 750.00`, `50.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 104.50`; no persistence |
+| `DT2-012` | `R2-12` | `USD 750.00`, `90.00%`, `N` | HTTP `200`; `discountPercent=5`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 104.50`; no persistence |
+| `DT2-013` | `R2-13` | `USD 750.00`, `2.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-014` | `R2-14` | `USD 750.00`, `10.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-015` | `R2-15` | `USD 750.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-016` | `R2-16` | `USD 750.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-017` | `R2-17` | `USD 1,500.00`, `2.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-018` | `R2-18` | `USD 1,500.00`, `10.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-019` | `R2-19` | `USD 1,500.00`, `50.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-020` | `R2-20` | `USD 1,500.00`, `90.00%`, `N` | HTTP `200`; `discountPercent=10`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 99.00`; no persistence |
+| `DT2-021` | `R2-21` | `USD 1,500.00`, `2.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=0`; `shippingMethod=STANDARD`; `previewTotal=USD 93.50`; no persistence |
+| `DT2-022` | `R2-22` | `USD 1,500.00`, `10.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=2`; `shippingMethod=STANDARD`; `previewTotal=USD 93.50`; no persistence |
+| `DT2-023` | `R2-23` | `USD 1,500.00`, `50.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=5`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 93.50`; no persistence |
+| `DT2-024` | `R2-24` | `USD 1,500.00`, `90.00%`, `Y` | HTTP `200`; `discountPercent=15`; `freeItemQuantity=10`; `shippingMethod=FREE_STANDARD`; `previewTotal=USD 93.50`; no persistence |
 
 These cases identify every stable reduced rule ID with complete concrete `B` inputs and exact action outcomes; the first eight rows also show the `-` expansion representatives. Run the unselected loyalty expansions when concrete exhaustive execution is required.
 
@@ -367,7 +367,7 @@ These cases identify every stable reduced rule ID with complete concrete `B` inp
 | Free-item outcome coverage | `0, 2, 5, 10` | 4 outcomes | `4 / 4 × 100%` |
 | Shipping outcome coverage | `STANDARD`, `FREE_STANDARD` | 2 outcomes | `2 / 2 × 100%` |
 
-Three loyalty expansions of `S1` and three of `S2` are not concrete executions if only one representative is run per reduced rule; list them as unexecuted concrete vectors, not as missing reduced rules. **Residual risk:** endpoints, malformed representations, calculations not modeled as conditions, persistence after final order creation, and higher-order or non-functional behavior need complementary tests.
+Eight loyalty expansions across `S1` and `S2` are not concrete executions if only one representative is run per reduced rule: each of the eight reduced rules has one executed loyalty value and one opposite-loyalty expansion remains unexecuted. List those eight concrete vectors as unexecuted, not as missing reduced rules. **Residual risk:** endpoints, malformed representations, calculations not modeled as conditions, persistence after final order creation, and higher-order or non-functional behavior need complementary tests.
 
 ## Worked Example 3: Constraints, overlap, precedence, default, and negative behavior
 
@@ -385,20 +385,20 @@ Three loyalty expansions of `S1` and three of `S2` are not concrete executions i
 
 Constraints and precedence:
 
-| Constraint ID | Formal rule | Classification and consequence |
-| --- | --- | --- |
-| `C-CON-1` | `COUPON_SUPPLIED=N ⇒ COUPON_VALID=N/A` | `N + Y` and `N + N` are impossible internal states. If an external payload supplies them, reject it as an invalid payload. |
-| `C-CON-2` | `ACCOUNT_SUSPENDED=Y` takes precedence over all eligibility decisions | Deny with HTTP `403`, code `ACCOUNT_SUSPENDED`; do not mutate the order. |
-| `C-CON-3` | A VIP-specific valid-threshold rule takes precedence over the broad valid-threshold rule | VIP receives the VIP outcome, not the broad outcome. |
-| `C-CON-4` | `COUPON_SUPPLIED=N` with `COUPON_VALID=N/A` is the default coupon path when not suspended | Accept with no discount and standard shipping. |
+| Constraint ID | Formal rule | Classification and consequence | Status |
+| --- | --- | --- | --- |
+| `C-CON-1` | `COUPON_SUPPLIED=N ⇒ COUPON_VALID=N/A` | `N + Y` and `N + N` are impossible internal states. If an external payload supplies them, reject it as an invalid payload. | Assumption E3-1 |
+| `C-CON-2` | After conditional-field validation produces a legal vector, `ACCOUNT_SUSPENDED=Y` takes precedence over all eligibility decisions | Deny with HTTP `403`, code `ACCOUNT_SUSPENDED`; do not mutate the order. External conditional-field violations are rejected before suspension handling. | Assumption E3-2 |
+| `C-CON-3` | A VIP-specific valid-threshold rule and a Premium-specific valid-threshold rule take precedence over the broad valid-threshold rule | VIP receives `20%`, Premium receives `15%`, and the remaining Basic vector receives `10%`. | Assumption E3-2 |
+| `C-CON-4` | `COUPON_SUPPLIED=N` with `COUPON_VALID=N/A` is the default coupon path when not suspended | Accept with no discount and standard shipping. | Assumption E3-2 |
 
-**Assumption E3-2:** The exact oracles are:
+**Assumption E3-2:** Use the same order fixture for every case: merchandise subtotal `USD 100.00`, shipping charge `USD 0.00`, and tax `10%` applied after the discount. Totals use decimal arithmetic and half-up rounding to cents: `round((100.00 × (1 - discountPercent / 100)) × 1.10, 2)`. Therefore the exact totals are `USD 110.00` at `0%`, `USD 99.00` at `10%`, `USD 93.50` at `15%`, and `USD 88.00` at `20%`. The exact oracles are:
 
 - suspended: HTTP `403`, code `ACCOUNT_SUSPENDED`, exact message `Account is suspended`, no discount, no order mutation;
 - supplied but invalid coupon: HTTP `422`, code `INVALID_COUPON`, exact message `Coupon is invalid`, no discount, no order mutation;
-- no-coupon default: HTTP `200`, `discountPercent=0`, `shippingMethod=STANDARD`, no coupon persisted;
-- valid coupon below threshold: HTTP `200`, `discountPercent=0`, `shippingMethod=STANDARD`, coupon accepted and persisted;
-- valid coupon at threshold: HTTP `200`, coupon persisted, total recalculated to cents, and discount is `10%` for Basic, `15%` for Premium, or `20%` for VIP.
+- no-coupon default: HTTP `200`, `discountPercent=0`, `shippingMethod=STANDARD`, `previewTotal=USD 110.00`, no coupon persisted;
+- valid coupon below threshold: HTTP `200`, `discountPercent=0`, `shippingMethod=STANDARD`, `previewTotal=USD 110.00`, coupon accepted and persisted;
+- valid coupon at threshold: HTTP `200`, coupon persisted, and `discountPercent`/`previewTotal` are `10%`/`USD 99.00` for Basic, `15%`/`USD 93.50` for Premium, or `20%`/`USD 88.00` for VIP.
 
 ### Feasibility, overlap, and canonical rules
 
@@ -409,7 +409,13 @@ Two externally constructible invalid payloads are intentionally kept outside tha
 - `COUPON_SUPPLIED=N, COUPON_VALID=Y` violates `C-CON-1`;
 - `COUPON_SUPPLIED=N, COUPON_VALID=N` violates `C-CON-1`.
 
-The source rules below demonstrate an overlap. `OVL-1` says “valid coupon, threshold met, non-suspended, any member tier → 10%.” `OVL-2` says “valid coupon, threshold met, non-suspended, VIP → 20%.” A VIP vector matches both. Confirmed `C-CON-3` makes `OVL-2` authoritative. The canonical executable rules normalize that intersection into disjoint Basic, Premium, and VIP rules; they do not hide the conflict.
+The source rules below demonstrate and resolve an overlap. `OVL-1` says “valid coupon, threshold met, non-suspended, any member tier → 10%.” `OVL-2` says “valid coupon, threshold met, non-suspended, VIP → 20%.” `OVL-3` says “valid coupon, threshold met, non-suspended, Premium → 15%.” A VIP vector matches `OVL-1` and `OVL-2`, and a Premium vector matches `OVL-1` and `OVL-3`. Assumption `C-CON-3` makes `OVL-2` and `OVL-3` authoritative over `OVL-1`. The canonical executable rules normalize those intersections into disjoint Basic, Premium, and VIP rules; they do not hide the conflict.
+
+| Source rule ID | `COUPON_SUPPLIED` | `COUPON_VALID` | `MEMBER_TIER` | `CART_MEETS_THRESHOLD` | `ACCOUNT_SUSPENDED` | Source outcome | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `OVL-1` | `Y` | `Y` | Any | `Y` | `N` | `10%` | Assumption E3-1 |
+| `OVL-2` | `Y` | `Y` | `VIP` | `Y` | `N` | `20%` | Assumption E3-1 |
+| `OVL-3` | `Y` | `Y` | `Premium` | `Y` | `N` | `15%` | Assumption E3-2 |
 
 | Rule ID | `COUPON_SUPPLIED` | `COUPON_VALID` | `MEMBER_TIER` | `CART_MEETS_THRESHOLD` | `ACCOUNT_SUSPENDED` | Outcome/expansions |
 | --- | --- | --- | --- | --- | --- | ---: |
@@ -421,7 +427,7 @@ The source rules below demonstrate an overlap. `OVL-1` says “valid coupon, thr
 | `R3-PREMIUM` | `Y` | `Y` | `Premium` | `Y` | `N` | HTTP `200`, 15%; 1 expansion |
 | `R3-VIP` | `Y` | `Y` | `VIP` | `Y` | `N` | HTTP `200`, 20%; 1 expansion |
 
-Here `-` in `R3-SUSP` means any value from a legal expansion, not an arbitrary invalid payload. Its 18 expansions are `(3 × 2 × 2) × 1` across coupon state, tier, and threshold. `R3-DEFAULT` expands to `3 × 2 = 6` tier/threshold combinations; `R3-INVALID` also expands to 6; `R3-BELOW` expands to 3. The remaining three threshold-valid tier vectors are singletons. The expansion counts sum to `18 + 6 + 6 + 3 + 1 + 1 + 1 = 36`.
+Here `-` in `R3-SUSP` means any value from a legal expansion, not an arbitrary invalid payload. Its 18 expansions are `(2 + 1) × 3 × 2 × 1`: supplied valid, supplied invalid, or no coupon; three member tiers; two threshold states; and suspended state. `R3-DEFAULT` expands to `3 × 2 = 6` tier/threshold combinations; `R3-INVALID` also expands to 6; `R3-BELOW` expands to 3. The remaining three threshold-valid tier vectors are singletons. The expansion counts sum to `18 + 6 + 6 + 3 + 1 + 1 + 1 = 36`.
 
 The default rule does not overlap coupon rules because it requires `COUPON_SUPPLIED=N` and `COUPON_VALID=N/A`, while coupon validity rules require `COUPON_SUPPLIED=Y`. The suspension rule intentionally overlaps every legal business vector, but `C-CON-2` supplies confirmed precedence and its denial oracle is compatible with no other action.
 
@@ -432,12 +438,12 @@ Common preconditions: checkout is available; the test account is authorized; the
 | Test case ID | Rule ID | Complete input data | Steps/actions | Exact oracle | Priority |
 | --- | --- | --- | --- | --- | --- |
 | `DT3-001` | `R3-SUSP` | `supplied=Y`, `valid=Y`, `tier=VIP`, `threshold=Y`, `suspended=Y` | Submit checkout authorization | HTTP `403`; code `ACCOUNT_SUSPENDED`; message `Account is suspended`; no discount and no order mutation | Critical |
-| `DT3-002` | `R3-DEFAULT` | `supplied=N`, `valid=N/A`, `tier=Premium`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=0`; `shippingMethod=STANDARD`; no coupon persisted and order remains unchanged except accepted checkout result | High |
+| `DT3-002` | `R3-DEFAULT` | `supplied=N`, `valid=N/A`, `tier=Premium`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=0`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; no coupon persisted | High |
 | `DT3-003` | `R3-INVALID` | `supplied=Y`, `valid=N`, `tier=Basic`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `422`; code `INVALID_COUPON`; message `Coupon is invalid`; no discount and no order mutation | High |
-| `DT3-004` | `R3-BELOW` | `supplied=Y`, `valid=Y`, `tier=Basic`, `threshold=N`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=0`; `shippingMethod=STANDARD`; supplied coupon is persisted as accepted; total is unchanged to cents | High |
-| `DT3-005` | `R3-BASIC` | `supplied=Y`, `valid=Y`, `tier=Basic`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=10`; coupon persisted; total recalculated exactly to cents | High |
-| `DT3-006` | `R3-PREMIUM` | `supplied=Y`, `valid=Y`, `tier=Premium`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=15`; coupon persisted; total recalculated exactly to cents | High |
-| `DT3-007` | `R3-VIP` | `supplied=Y`, `valid=Y`, `tier=VIP`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=20`; VIP precedence applies; coupon persisted; total recalculated exactly to cents | Critical |
+| `DT3-004` | `R3-BELOW` | `supplied=Y`, `valid=Y`, `tier=Basic`, `threshold=N`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=0`; `shippingMethod=STANDARD`; `previewTotal=USD 110.00`; supplied coupon is persisted as accepted | High |
+| `DT3-005` | `R3-BASIC` | `supplied=Y`, `valid=Y`, `tier=Basic`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=10`; `previewTotal=USD 99.00`; coupon persisted | High |
+| `DT3-006` | `R3-PREMIUM` | `supplied=Y`, `valid=Y`, `tier=Premium`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=15`; `previewTotal=USD 93.50`; coupon persisted | High |
+| `DT3-007` | `R3-VIP` | `supplied=Y`, `valid=Y`, `tier=VIP`, `threshold=Y`, `suspended=N` | Submit checkout authorization | HTTP `200`; `discountPercent=20`; `previewTotal=USD 88.00`; VIP precedence applies; coupon persisted | Critical |
 | `DT3-NEG-01` | `INVALID-C-CON-1` | External payload `supplied=N`, `valid=Y`, `tier=Basic`, `threshold=N`, `suspended=N` | Submit the payload without client-side normalization | HTTP `400`; code `INVALID_CONDITIONAL_FIELD`; exact message `Coupon validity is not applicable when no coupon is supplied`; no checkout session or order mutation; violated `C-CON-1` | High |
 | `DT3-NEG-02` | `INVALID-C-CON-1` | External payload `supplied=N`, `valid=N`, `tier=Basic`, `threshold=N`, `suspended=N` | Submit the payload without client-side normalization | HTTP `400`; code `INVALID_CONDITIONAL_FIELD`; exact message `Coupon validity is not applicable when no coupon is supplied`; no checkout session or order mutation; violated `C-CON-1` | High |
 
