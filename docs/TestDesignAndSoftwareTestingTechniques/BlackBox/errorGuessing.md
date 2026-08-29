@@ -1,204 +1,317 @@
-Dynamic - Experience based
+# Error Guessing Test Design
 
-Error Guessing;
+## Scope and purpose
 
-Предположение об ошибках (EG - error guessing): Метод проектирования тестов, когда опыт тестировщика используется для предугадывания того, какие дефекты могут быть в тестируемом компоненте или системе в результате сделанных ошибок, а также для разработки тестов специально для их выявления. (ISTQB)
+Error Guessing is a black-box, experience-based test-design technique. A tester uses knowledge of the product, domain, users, technology, previous failures, defect history, and common error patterns to predict where defects may occur and designs targeted checks to expose them.
 
-Предугадывание ошибки (Error Guessing - EG). Это когда тест аналитик использует свои знания системы и способность к интерпретации спецификации на предмет того, чтобы "предугадать" при каких входных условиях система может выдать ошибку. Например, спецификация говорит: "пользователь должен ввести код". Тест аналитик, будет думать: "Что, если я не введу код?", "Что, если я введу неправильный код? ", и так далее. Это и есть предугадывание ошибки.
+The technique is useful when specifications are incomplete, time is limited, a feature has recently changed, or historical evidence points to a fragile area. It is heuristic rather than exhaustive. A passing guessed scenario does not prove that other values, paths, environments, requirements, or failure modes are correct. Error Guessing complements systematic techniques; it does not replace them.
 
-Некоторые факторы использующиеся при Error Guessing:
+This guide is a practical project supplement aligned with ISTQB-consistent black-box and experience-based terminology. It is not a replacement for the current official ISTQB syllabus, product requirements, risk analysis, defect-management process, or specialist security and non-functional testing.
 
-    Уроки, извлеченные из прошлых релизов;
+## Status labels and scope rules
 
-    Исторические знания;
+Use the following labels throughout a design:
 
-    Интуиция;
+- **Confirmed** — stated in a requirement or contract, observed product behavior, approved rule, or verified defect evidence.
+- **Assumption** — introduced to make a self-contained example or provisional design possible.
+- **Question/TBD** — unresolved information that requires confirmation.
+- **Residual risk** — meaningful behavior or evidence outside the selected scope or not sufficiently verified.
 
-    Тикеты с прода;
+An error hypothesis is not a defect or requirement. Keep a hypothesis unconfirmed until execution or authoritative evidence supports it. Do not silently classify unknown behavior as invalid, impossible, or a defect.
 
-    Review checklist;
+## Definition and terminology
 
-    Пользовательский интерфейс приложения;
+| Term | Meaning |
+| --- | --- |
+| Error Guessing | An experience-based technique for predicting likely defects and designing targeted tests. |
+| Error guess | An initial intuition or observed pattern suggesting where a failure may occur. |
+| Defect hypothesis | A falsifiable statement about a possible defect, its trigger, and predicted observable consequence. |
+| Error/mistake | A human action or decision that can introduce an imperfection. |
+| Defect | An imperfection in a work product that may cause incorrect behavior. |
+| Failure | An incorrect behavior observed when the software is executed. |
+| Symptom | An observable indication that may point to a failure or defect. |
+| Evidence source | A requirement, defect record, incident, test result, review, checklist, risk report, or knowledge source supporting a hypothesis. |
+| Historical defect | A previously observed and documented defect used for targeted testing or regression. |
+| Defect pattern | A recurring class of mistakes, such as missing validation, type coercion, off-by-one logic, incorrect ordering, stale data, or incomplete recovery. |
+| Error-prone area | A feature, path, input, integration, rule, environment, or recent change with elevated suspected risk. |
+| Checklist heuristic | A reusable list of common risks used to generate hypotheses; it is not proof that every item applies. |
+| Negative/error-prone scenario | A selected case targeting invalid, unusual, malformed, boundary, failure, recovery, or historically risky behavior. |
+| Regression seed | A known defect, incident, or prior failure used to create a repeatable regression check. |
+| Predicted failure | The specific incorrect result a hypothesis expects if the suspected defect exists. |
+| Test oracle | The exact observable result used to determine pass, fail, blocked, or unresolved status. |
+| Execution evidence | A response, state, data, event, log, trace, screenshot, or other permitted artifact recorded during execution. |
+| Reproducibility | The ability of another tester to recreate the setup, inputs, environment, timing, and outcome. |
+| Priority/risk | The documented basis for selecting and ordering a hypothesis or case. |
+| Hypothesis coverage | The proportion of selected hypotheses exercised and given a recorded result. |
+| Defect yield | Findings per stated denominator, such as executed scenarios; it is not a completeness measure. |
+| Residual risk | A meaningful untested, weakly evidenced, blocked, or out-of-scope possibility. |
 
-    Отчеты о рисках программного обеспечения;
+A good hypothesis is specific and falsifiable:
 
-    Тип данных, используемых для тестирования;
+> Given [setup and trigger], the system may [predicted failure] because [evidence], while the requirement expects [exact oracle].
 
-    Общие правила тестирования;
+“Something may break” and “try strange data” are not executable hypotheses until the data, context, action, expected behavior, and evidence are defined.
 
-    Результаты предыдущих тестов;
+## Distinction from related techniques
 
-    Знание об AUT (тестируемое приложение);
+- **Equivalence Partitioning (EP)** identifies behaviorally equivalent valid and invalid classes. Error Guessing may add an unusual or historically risky representative but does not establish complete partitions.
+- **Boundary Value Analysis (BVA)** systematically targets values at and around boundaries. Error Guessing may suggest a forgotten endpoint; it does not replace boundary identification.
+- **Decision Tables** enumerate condition combinations and expected actions. Error Guessing may target a missing rule or precedence error but does not prove rule completeness.
+- **Pairwise or higher `t`-way testing** covers selected interactions systematically. Error Guessing may target a known problematic combination but does not provide pair or tuple coverage.
+- **State-Transition Testing** models states, events, guards, and paths. Error Guessing may add duplicate, stale, terminal, retry, or recovery checks but does not prove lifecycle coverage.
+- **Exploratory testing** combines learning, test design, and execution within a mission or charter. Error Guessing is a heuristic source of targeted ideas and may be used during exploratory testing, but the techniques are not synonyms.
+- **Ad-hoc testing** is informal and minimally structured. Error Guessing can start informally, but reusable results should record hypotheses, oracles, evidence, and traceability.
+- **Attack-based/security testing** deliberately provokes failures, especially security failures, using attacker-oriented methods. Security testing needs threat models and specialist controls; Error Guessing alone is not security assurance.
+- **Risk-based testing** prioritizes testing by risk. Error Guessing supplies candidates; risk analysis may prioritize them alongside systematic cases.
+- **Regression testing** checks known behavior after change. An Error Guessing case becomes a regression case when a known failure or approved regression obligation is recorded.
+- **Model-based and branch/condition coverage** define explicit behavioral or structural obligations. Error Guessing has no universal denominator for all values, branches, paths, or requirements.
+- **Negative testing** focuses on invalid or failure behavior. Error Guessing can generate negative tests but also targets positive-path defects such as wrong sorting, rounding, persistence, or browser behavior.
 
-Исследовательское тестирование (Exploratory testing);
+## Evidence and input model
 
-См. в видах тестирования
+Gather evidence before or alongside hypothesis creation. Useful sources include:
 
-Ad-hoc testing;
+- requirements, acceptance criteria, and API contracts;
+- previous release defects, production incidents, customer tickets, and support trends;
+- lessons learned, retrospectives, test failures, flaky patterns, and review findings;
+- risk registers, checklists, domain rules, and knowledge of similar systems;
+- tester, developer, user, architecture, technology, and AUT knowledge;
+- recent code or configuration changes, complex logic, high-churn or high-impact paths;
+- data types, formats, boundaries, encodings, locales, time zones, and UI patterns;
+- browsers, devices, integrations, queues, persistence, retries, and recovery behavior.
 
-См. в видах тестирования
+Every evidence source should record a stable ID, source/reference, observed fact or lesson, affected area, date or version when known, confidence and relevance, related requirement or risk, and status. Historical and checklist evidence generates candidates; it is not a universal rule that every listed risk exists in every product.
 
-Attack Testing;
+### Evidence inventory
 
-Атака (attack): Направленная и нацеленная попытка оценить качество, главным образом надежность, объекта тестирования за счет попыток вызвать определенные отказы. См. также негативное тестирование. (ISTQB)
+| Evidence ID | Source/type | Observation or defect pattern | Affected area | Requirement/risk reference | Confidence/relevance | Status | Follow-up |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `EG-EVID-001` |  |  |  |  |  | Confirmed / Assumption / Question/TBD / Residual risk |  |
 
-_Тестирование на основе атак (attack-based testing): Методика тестирования на основе опыта, использующая программные атаки с целью провоцирования отказов, в частности - отказов, связанных с защищенностью. (ISTQB) _
+## Error-prone areas and hypotheses
 
+Identify areas with complex logic, recent changes, frequent use, high business impact, fragile integrations, historical defects, unusual data, or difficult recovery. Record why an area is considered risky rather than relying on intuition alone.
 
-ГОЛОВНАБЛОГТехнічні статтіПередбачення помилки як техніка тест-дизайну
-Передбачення помилки як техніка тест-дизайну
+### Error-prone area inventory
 
-    26.05.2023
-    Опубліковано: Admin
+| Area ID | Feature/component | Why error-prone | Evidence IDs | Change/use/impact | Candidate scenarios | Priority | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `EG-AREA-001` |  |  |  |  |  | High/Medium/Low | Confirmed / Assumption / Question/TBD / Residual risk |
 
-Передбачення помилки як техніка тест-дизайну
+### Hypothesis inventory
 
-Кожна людина по-своєму унікальна: різний характер, поведінка і, звичайно ж, спосіб мислення. Тому, в силу цього чинника, в процесі розробки ПЗ неминуче будуть виникати різного роду дефекти і недоробки.
+| Hypothesis ID | Area ID | Suspected failure mechanism | Trigger/context | Predicted failure | Exact expected oracle | Evidence IDs | Requirement/risk references | Impact/likelihood/detectability | Priority | Scenario IDs | Result/status | Residual risk |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `EG-HYP-001` |  |  |  |  |  |  |  |  | High/Medium/Low |  | Untested / Passed-disproved / Confirmed defect / Blocked / Unresolved |  |
 
-По суті, передбачення помилки в широкому сенсі – це все, що робить тестувальник при складанні тестових сценаріїв. Це словосполучення можна використовувати для опису всіх технік тест-дизайну. Адже основна мета цього процесу і полягає в тому, щоб визначити, в якому місці і за яких обставин з найбільшою ймовірністю може виникнути помилка, а також перевірити це в процесі тестування. Для тестувальника цей навик може стати відмінною підмогою в роботі. Щоб використовувати передбачення помилки в тестуванні, зовсім необов'язково мати досвід розробки ПЗ. Важливо розуміти базову логіку написання коду і розбиратися у вимогах, які будуть пред'являтися до кінцевого продукту. Далеко не зайвим буде і досвід в тестуванні схожих проєктів. Якщо ж немає такого досвіду - як варіант, можна скористатися допомогою колег, які успішно застосовують цю техніку у повсякденній роботі. Але найкраще, в такому випадку, сконцентруватися на інших, більш відчутних техніках складання тест-кейсів, які дозволять отримати надійніший результат.
-Передбачення помилок як техніка тест-дизайну
+## Repeatable workflow
 
-Як правило, в процесі створення тест-кейсів застосовується далеко не одна техніка тест-дизайну. Це пов'язано з тим, що у кожної з них свої способи знаходження дефектів. Різні методи призначені для певного ряду завдань і дозволяють «виловити» нові баги.
+1. Define the feature, operation, scope, requirement or evidence basis, and exact oracle.
+2. Identify inputs, representations, roles, states, existing data, integrations, timing, and environments.
+3. Collect and classify requirements, defect history, incidents, prior failures, checklists, risks, domain knowledge, and technology patterns.
+4. Identify error-prone areas and likely user or implementation mistakes.
+5. Formulate falsifiable hypotheses with stable IDs, predicted failures, evidence, and status.
+6. Check duplicate guesses and link existing EP, BVA, decision-table, pairwise, state, or regression cases rather than duplicating them.
+7. Prioritize by documented impact, likelihood, detectability, exposure, history, change risk, confidence, and execution cost.
+8. Convert selected hypotheses into minimal but complete scenarios with deterministic setup, input, context, environment, action, oracle, evidence capture, and cleanup.
+9. Consider applicable missing, malformed, boundary, representation, duplicate, ordering, permission, timeout, recovery, UI, persistence, and historical-regression risks.
+10. Review reproducibility: build, versions, browser/device, locale, time zone, clock, feature flags, network, random seed, external dependencies, reset, and cleanup.
+11. Execute and capture actual evidence; distinguish passed/disproved, confirmed defect, blocked, unresolved, and Question/TBD outcomes.
+12. Triage unexpected behavior as a defect, requirement issue, environment issue, test-data issue, or unconfirmed hypothesis. Create or link a defect only when evidence supports it.
+13. Convert confirmed defects into regression seeds when appropriate and reassess related hypotheses.
+14. Calculate declared metrics with explicit denominators and list gaps, exclusions, and residual risks.
+15. Add complementary formal, exploratory, security, reliability, performance, accessibility, usability, or compatibility tests as needed.
+16. Update an approved checklist or lessons-learned inventory from reliable evidence.
 
-На додаток до решти технік часто використовується передбачення помилки - ситуація, при якій тестувальник думає над тим, які помилки могли бути допущені в процесі розробки, а також визначає шляхи їх появи, використовуючи інтуїцію, знання і досвід. Саме тому цей спосіб рекомендується до використання тестувальникам, у яких є загальний досвід роботи, а також знання особливостей конкретного проєкту або навіть розробника. Наприклад, якщо відомо, що функціонал з масивами буде реалізовувати розробник, який часто помиляється з сортуванням, потрібно обов'язково написати кейси для перевірки порядку розташування елементів.
+## Scenario design and exact oracles
 
-Таке тестування є найбільш корисним в умовах відсутності або недостатньої кількості специфікацій і суворих дедлайнів. Але, як і інші техніки тест-дизайну, передбачення помилки має свої позитивні і негативні сторони.
-Переваги методу передбачення помилок:
+Select categories only when supported by the feature, risk, evidence, or environment. Candidate categories include:
 
-    можливість використання на різних етапах розробки;
-    відсутність необхідності в формалізації, тобто зовсім необов'язково оформляти тест-кейси – досить просто виконувати потрібні перевірки, маючи лише доступ до готового продукту;
-    можливість застосування при нестачі часу. 
+- missing, null, empty, blank, whitespace-only, default, and partially supplied values;
+- malformed, truncated, unsupported, oversized, encoded, Unicode, or type-coerced data;
+- values below, at, and above numeric, length, date, time, count, quota, or size limits;
+- date, time zone, daylight-saving, locale, collation, currency, rounding, precision, and normalization;
+- sorting, filtering, pagination, mixed numeric/text values, duplicate keys, and stable ordering;
+- permissions, ownership, account state, expired credentials, repeated codes, replay, and unauthorized actions;
+- duplicate submissions, idempotency, retries, stale callbacks, delayed or out-of-order messages;
+- timeouts, network loss, cancellation, reload, restart, partial completion, rollback, and recovery;
+- browser, device, viewport, rendering, keyboard, JavaScript, and compatibility differences;
+- cache invalidation, synchronization, persistence, notification, audit, calculation, external invocation, and transaction behavior;
+- known historical defects and regression seeds.
 
-Недоліки:
+Every case must include the exact expected behavior. Possible oracles are HTTP status and body fields, exact validation message, accepted/rejected state, persisted value, calculated amount and precision, item order, state transition, notification, audit record, event count, external call, processing path, no duplicate side effect, or explicit recovery result.
 
-Основний же недолік техніки передбачення помилки – покриття тестами. Якщо в ході застосування цього методу буде знайдено певну кількість помилок – неможливо гарантувати те, що весь функціонал був протестований. Наприклад, якщо був знайдений дефект верстки при зменшенні розміру вікна браузера – це не означає, що всі можливі баги верстки були виявлені. Тому, саме через відсутність повного охоплення об'єкту тестами, передбачення помилки зазвичай застосовується в поєднанні з іншими техніками тест-дизайну.
-Застосування методу на реальних проєктах
+“Works correctly,” “handles gracefully,” and “an error occurs” are not oracles. If expected failure handling is unspecified, mark it `Question/TBD`; do not infer a confirmed defect from an unexpected result without sufficient evidence.
 
-Залежно від характеру і специфіки продукту, передбачення помилки може виглядати по-різному. Найпростіший приклад при тестуванні будь-якого веб-сайту: якщо вимкнути виконання Javascript у браузері, то напевно що-небудь зламається. Нижче буде наведена лише незначна частина поширених помилок розробників, які можна виявити в процесі тестування.
-Сортування.
+### Executable scenario template
 
-Тестуючи цією функцією, необхідно враховувати поширену помилку серед розробників, коли числа «10», «11», «12» і так далі до числа «19» виявляються між числами «1» і «2». Таким чином, масив виводиться в такому вигляді:
-1
-10
-11
-12
-...
-19
-2
-20
-Тому при тестуванні подібних масивів не варто обмежувати діапазон даних, що вводяться одним десятком.
+| Test case ID | Hypothesis ID | Evidence IDs | Objective | Requirement/risk reference | Priority | Preconditions/setup | Complete input/context | Environment/clock/locale | Steps/actions | Exact expected oracle | Evidence to capture | Cleanup/repeatability | Result/status | Defect/result ID | Technique tags | Assumptions/notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `EG-TC-001` | `EG-HYP-001` | `EG-EVID-001` |  |  | High/Medium/Low |  |  |  | 1.  2.  3.  |  |  |  | Untested / Passed / Confirmed defect / Blocked / Unresolved / Question/TBD |  | Error Guessing / EP / BVA / negative / regression |  |
 
-Продовжуючи тему масивів, можна згадати про сортування розмірів при тестуванні інтернет-магазинів. Тут досить часто зустрічається помилка, при якій сортування універсальних розмірів відбувається за алфавітом:
+## Prioritization and reproducibility
 
-L, M, S, XL, …
-Тоді як правильно вибудувати в порядку збільшення розміру:
-XXS, XS, S, M, L, XL, …
-«У мене в браузері все працює».
+Document the prioritization method and rating scales. Consider business, safety, security, and data-loss impact; likelihood and defect history; detectability; customer exposure; recent change and complexity; environment availability; confidence in the evidence; and execution cost. Separate hypothesis priority, test-case priority, defect severity, and business risk. A numeric score is a decision aid, not objective truth.
 
-Як правило, в зв'язку з нестачею часу, розробники використовують для тестування своїх продуктів тільки один браузер. Далеко не завжди його версія збігається з тією, яка є пріоритетною на проєкті. Також розробка часто відбувається на MacOS, де стандартом вважається браузер Safari, а поновлення Chrome виходять з невеликим запізненням. Через це також можуть виникати помилки, так як різні браузери можуть інакше обробляти один і той же код. Рішення просте - уточнити пріоритетність кожного браузера і виконати тест-кейси для кожного з них. Корисно тестувати сайт на декількох браузерах одночасно - так буде простіше помітити відмінності в поведінці.
-Ігнорування обробки некоректних вхідних даних.
+To reduce confirmation bias, review disconfirming evidence, involve another tester or domain expert when practical, and define the oracle before inspecting the result. Record build, data, role, environment, timing, locale, feature flags, random seed, ordering, external dependencies, and reset instructions so another tester can reproduce the case.
 
-Нерідкі випадки, коли розробники навмисно не витрачають час на продумування і впровадження станів, які, на їхню думку, неможливі. Але потрібно враховувати, що продуктом будуть користуватися люди з самим різним мисленням, і вони можуть вводити в систему найрізноманітніші дані, які будуть некоректно оброблятися. У цьому випадку завдання тестувальника – передбачити всі можливі варіанти поведінки користувача і перевірити їх.
-Наприклад: в Україні номера телефонів мобільних операторів складаються з 12 символів, тому розробник обмежує довжину поля для введення телефону до 12. Але якщо поле не містить попередньої розмітки (рисок і дужок), то користувач може вводити номер телефону самими різними способами:
+## Execution evidence and defect follow-up
 
-    380yyxxxxxxx: цей варіант буде прийнятий системою, так як був передбачений розробником;
-    +380yyxxxxxxx: через символ «+» номер не пройде валідацію, так як довжина поля перевищує очікувану;
-    380 yy xxxxxxx: якщо поле вважає прогалини як окремі символи – тут вже 14 символів, а не 12;
-    380-yy-xxxxxxx/380(99)xxxxxxx: ситуація аналогічна до описаної вище.
+| Result ID | Test case ID | Build/environment | Execution date/time | Observed response/state/data | Evidence artifact/reference | Oracle comparison | Outcome | Defect or incident ID | Reproducibility notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `EG-RES-001` | `EG-TC-001` |  |  |  |  |  | Passed / Confirmed defect / Blocked / Unresolved / Question/TBD |  |  |
 
-У зв'язку з величезним вибором продуктів і підходів до розробки ПЗ, помилки можуть бути різними. Їх всі необхідно знайти і усунути. Головною перевагою техніки передбачення помилки слід зазначити відсутність необхідності складання тестових сценаріїв. Саме тому застосовувати цей метод можна вже на самих ранніх етапах розробки, або коли час строго обмежений, і навіть коли немає специфікації. Але успішність застосування цієї техніки безпосередньо залежить від рівня професійної підготовки тестувальника на різних проєктах.
-Error Guessing in Software Testing
-Last Updated : 9 Jun, 2026
+A confirmed defect should have reproducible steps, complete data and context, actual evidence, expected oracle, impact, and an appropriate defect reference. A blocked or unresolved result is not a disproved hypothesis. If the requirement is ambiguous, report a requirement question separately from a product defect.
 
-Software applications are an essential part of daily life, so ensuring their quality is very important. Software testing helps identify defects and improve product reliability. Along with formal test cases, testers also use experience-based techniques like error guessing.
+## Coverage, gaps, and limitations
 
-    Software testing ensures the application is error-free and meets user expectations.
-    Testers go beyond written test cases and use experience to find hidden bugs.
-    Error guessing is an informal technique where testers predict defects based on intuition and past experience.
+Error Guessing has no universal formal coverage denominator. Declare an inventory before execution and report separate metrics such as:
 
-Process of Error Guessing
+- **Selected hypothesis coverage** = executed selected hypotheses with a recorded outcome / selected executable hypotheses × 100%.
+- **Scenario coverage** = executed selected scenario IDs / selected executable scenario IDs × 100%.
+- **Evidence-source coverage** = selected relevant evidence sources represented by scenarios / selected relevant evidence sources × 100%.
+- **Error-prone-area coverage** = selected areas exercised / selected areas × 100%.
+- **Historical-regression coverage** = executed selected regression seeds / selected regression seeds × 100%.
+- **Negative-category coverage** = executed selected negative/error-prone categories / selected applicable categories × 100%.
+- **Risk-priority coverage** = execution reported separately for high, medium, and low priority items.
+- **Reproducibility coverage** = cases with complete repeatability metadata / executed cases × 100%.
+- **Defect yield** = confirmed defects / executed scenarios, with the denominator and period stated.
 
-The process of Error Guessing involves identifying potential defect-prone areas in an application and designing test cases based on experience and intuition rather than formal rules.
+Also report passed/disproved hypotheses, confirmed defects, blocked cases, unresolved cases, Question/TBD items, untested high-risk items, evidence and areas not represented, historical defects not regressed, excluded categories, and residual risks. Do not combine Error Guessing, formal, exploratory, security, regression, or non-functional counts into one quality claim.
 
-    Understanding the application requirements and functionality.
-    Using tester experience to identify areas where errors are likely to occur.
-    Thinking about possible mistakes made by developers or users (e.g., invalid inputs, missing values, boundary conditions).
-    Creating test cases based on these guessed error scenarios.
-    Executing the test cases on the application.
-    Observing results and identifying unexpected behavior or defects.
-    Reporting the found issues for fixing.
+100% selected-hypothesis coverage means only that every selected hypothesis was exercised and assigned an outcome. It does not prove that all defects, values, requirements, branches, states, combinations, sequences, security properties, or non-functional characteristics are correct. Defect yield is an observation about selected checks, not an estimate of all undiscovered defects.
 
-Error Guessing Techniques
+### Coverage and gap template
 
-Error Guessing is based on experience and intuition, but testers use some common techniques to improve its effectiveness:
-w14124124
-Error Guessing Techniques
+| Coverage ID | Metric | Declared denominator | Exercised numerator | Percentage/result | Uncovered/excluded items | Evidence/notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `EG-COV-001` | Selected hypothesis coverage |  |  |  |  |  |
 
-    Experience-based testing: Using past project knowledge and previously found defects to predict new ones.
-    Defect history analysis: Studying old bug reports to identify frequently occurring issues.
-    Boundary-related guessing: Testing extreme values, limits, and edge cases where errors are common.
-    Invalid input testing: Providing wrong, unexpected, or random inputs to check system behavior.
-    Common mistake assumption: Thinking like a developer or user and guessing typical human errors.
-    Complex area focus: Targeting highly complex modules or logic-heavy parts of the application.
-    Error-prone feature targeting: Focusing on frequently used or recently modified features.
-    Negative testing approach: Intentionally testing scenarios where the system should fail or handle errors gracefully.
+### Residual-risk template
 
-Factors Considered in Error Guessing
+| Risk ID | Uncovered or weakly evidenced area | Reason not covered | Impact/likelihood | Complementary technique/follow-up | Status |
+| --- | --- | --- | --- | --- | --- |
+| `EG-RISK-001` |  |  |  |  | Residual risk / Question/TBD |
 
-Error Guessing depends on several important factors that help testers predict possible defects in software. These factors include:
+## Worked examples
 
-    Tester’s experience and domain knowledge
-    Past defects and historical bug data
-    Lessons learned from previous projects or releases
-    Common mistakes found in similar applications
-    Complexity of the application or module
-    User behavior and frequently used features
-    Production issues and customer-reported problems
-    Test execution results and failure patterns
+The examples below are teaching models. Their product rules are **Assumptions** unless a real requirement is supplied. Each uses a small declared inventory; none claims feature-wide coverage.
 
-Application of Error Guessing in Software Testing
+### Example 1: Verification-code validation
 
-Error Guessing is commonly used along with black-box testing techniques such as Boundary Value Analysis and Equivalence Partitioning, especially when formal methods do not cover all possible error-prone scenarios.
-It is best applied in the following situations
+**Requirement assumption `REQ-EG-01` (Assumption):** A six-digit code is valid for five minutes, may be used once, and returns HTTP `204` on success. Missing, malformed, wrong, or expired codes return HTTP `400` with an exact error code; a replay returns HTTP `409`. Three failed attempts suspend verification for ten minutes. A successful verification creates one audit event and marks the account verified.
 
-    Time and Resource Constraints: Helps quickly identify critical defects when time for detailed test design is limited.
-    Agile Environments: Supports fast and iterative testing during continuous development cycles.
-    Complex or Unfamiliar Systems: Useful when documentation is limited and testers rely on experience.
-    Unclear or Incomplete Specifications: Helps identify missing or incorrect requirements.
-    High-Risk Modules: Focuses on areas where failures can cause major functional or business impact. 
+**Evidence:** `EG-EVID-01` (Assumption), a prior validation defect involving blank input; `EG-EVID-02` (Assumption), a checklist item for expiry and replay. **Area:** `EG-AREA-01`, code validation and attempt state. **Hypotheses:**
 
-Error Guessing complements structured testing by covering real-world, experience-based scenarios that formal techniques may miss.
-Advantages of Error Guessing
+| Hypothesis | Trigger | Predicted failure | Exact oracle | Priority |
+| --- | --- | --- | --- | --- |
+| `EG-HYP-01` | blank or whitespace code | validator accepts a non-code or returns a server error | HTTP `400`, body `code=CODE_REQUIRED`, no audit event, account remains unverified | High |
+| `EG-HYP-02` | valid code at `t=5:00` | expiry boundary is handled incorrectly | HTTP `400`, body `code=CODE_EXPIRED`; no verification or audit event | High |
+| `EG-HYP-03` | submit the valid code twice | replay creates a second verification or audit event | first request `204`; second request `409`, `code=CODE_REPLAY`; exactly one audit event | High |
+| `EG-HYP-04` | three wrong codes | failed-attempt counter or suspension is wrong | third response `401`; account status `suspended`; fourth attempt returns `423` for ten minutes | Medium |
 
-    Helps find hidden and unexpected defects
-    Very simple and easy to apply
-    Requires no formal test design technique
-    Based on real experience and practical knowledge
-    Effective for finding critical and high-risk bugs
-    Can be used along with other testing techniques
-    Useful when time is limited for testing
-    Helps in exploratory and ad-hoc testing
+**Setup and cases:** Create account `acct-100`, code `482731`, freeze the test clock, and use a unique request ID per submission. Submit exact blank, expiry-boundary, duplicate, and wrong-code requests. Capture response status/body, account state, audit-event count, and timestamps. Reset the account and clock after each case.
 
-Limitations of Error Guessing
+For the four selected hypotheses, 4/4 hypotheses were executed = **100% selected-hypothesis coverage** and 4/4 scenarios executed = **100% scenario coverage**. This does not cover all code formats, clocks, rate-limit races, delivery failures, roles, or security threats. If the five-minute boundary or suspension policy is not confirmed, keep the relevant result `Question/TBD`.
 
-    Depends heavily on tester experience and intuition
-    No formal structure or documented procedure
-    Cannot guarantee complete test coverage
-    May miss defects if tester lacks domain knowledge
-    Highly unpredictable and subjective approach
-    Not suitable for large or complex systems alone
-    Difficult to repeat or measure results consistently
-    Effectiveness varies from tester to tester
+### Example 2: Sorting and locale handling
 
-Best Practices for Effective Error Guessing
+**Requirement assumption `REQ-EG-02` (Assumption):** A catalog API sorts `price` numerically in ascending order, preserves source order for equal prices, and uses locale `en-US` for names. The web UI must display the API order in supported Chrome and Safari versions.
 
-    Gain strong knowledge of application requirements and functionality
-    Use past experience from previous projects and defect history
-    Focus on error-prone and complex areas of the application
-    Think like a developer and end user to predict mistakes
-    Pay attention to boundary values and invalid inputs
-    Perform negative testing to check system behavior under wrong inputs
-    Prioritize recently changed or frequently used features
-    Keep a checklist of common defects and mistakes
-    Combine Error Guessing with formal testing techniques for better coverage
-    Continuously improve skills through practice and learning from bugs
+**Evidence:** `EG-EVID-03` (Assumption), a historical defect where strings `1`, `10`, and `2` were sorted lexicographically; `EG-EVID-04` (Assumption), a support report about size labels. **Area:** `EG-AREA-02`, catalog ordering. **Hypotheses:**
+
+- `EG-HYP-05` predicts that numeric-looking strings are compared as text.
+- `EG-HYP-06` predicts that equal-price records are reordered rather than stable.
+- `EG-HYP-07` predicts that size labels are sorted alphabetically instead of by domain order.
+
+Use data `["1", "10", "2"]`, equal-price records with IDs `A` then `B`, and sizes `["XXS", "XS", "S", "M", "L", "XL"]`. In `en-US`, expect numeric order `1, 2, 10`; equal prices retain `A, B`; size order follows the confirmed domain rule. Compare API JSON order and UI order in the declared browser versions and capture locale, browser build, request, response, and rendered order.
+
+Three selected hypotheses and three scenarios produce 3/3 = **100% selected-hypothesis coverage** and 3/3 = **100% scenario coverage** for this small inventory. One area and two evidence sources are represented, so area coverage is 1/1 = **100%** and evidence-source coverage is 2/2 = **100%**. This does not prove other locales, browsers, pagination, filters, nulls, dates, or all catalog data. Use EP for data classes, BVA for numeric limits, Pairwise for browser/locale combinations, and compatibility testing for the supported matrix.
+
+### Example 3: API duplicate and timeout handling
+
+**Requirement assumption `REQ-EG-03` (Assumption):** `POST /payments` accepts an idempotency key and creates one payment. A valid new request returns `201` with payment ID and creates one ledger entry. Repeating the same key returns the same payment ID and does not create another entry. A timeout may occur after the provider accepts the payment; the client must safely retry and eventually observe one completed payment.
+
+**Evidence:** `EG-EVID-05` (Assumption), a prior incident involving duplicate charges; `EG-EVID-06` (Assumption), an integration timeout risk. **Area:** `EG-AREA-03`, payment boundary and retry handling. **Hypotheses:** `EG-HYP-08` predicts duplicate ledger entries after a retry; `EG-HYP-09` predicts a timeout retry creates a second provider charge.
+
+Create order `ord-200`, amount `19.95`, key `idem-200`, and a provider stub that accepts the first request but delays its response beyond the client timeout. Send the request, record the timeout, retry with the same key, then query payment status and the ledger. Expected result: at most one provider charge, one payment ID, one ledger entry for `19.95`, and a documented final status. A malformed amount case is separate and expects HTTP `400`, a precise error code, no provider call, and no ledger entry.
+
+Three selected cases (malformed input, duplicate request, timeout retry) executed with outcomes give 3/3 = **100% scenario coverage**; the two hypotheses executed give 2/2 = **100% hypothesis coverage**. Negative coverage is 1/1 for the selected malformed category and regression-seed coverage is 1/1 for the duplicate-charge incident. These metrics do not cover concurrent keys, provider outages, all currencies, network partitions, or every payload representation.
+
+### Example 4: Historical production-defect regression
+
+**Evidence `EG-EVID-07` (Assumption):** Release `2.4.0` accepted phone input `+380991234567` only when its length was counted before normalization, returning a generic server error. The approved requirement `REQ-EG-04` (Assumption) says accepted international phone input is normalized to E.164 and invalid input receives HTTP `400` with `PHONE_INVALID`.
+
+Traceability:
+
+```text
+EG-EVID-07 → EG-AREA-04 phone normalization → EG-HYP-10 length checked before normalization
+→ EG-TC-10 fixed regression input → EG-RES-10 observed response → regression status
+```
+
+In the fixed build, create a test account, submit `+380991234567`, and verify HTTP `200`, normalized persisted value `+380991234567`, and no server error. Submit `380 99 123 45 67` as a related hypothesis only if the requirement confirms whitespace normalization; otherwise mark it `Question/TBD`. Capture build, request, response, database value, and defect reference. If the real record is unavailable, all release and behavior details remain Assumptions until confirmed.
+
+One selected regression seed executed gives 1/1 = **100% historical-regression coverage** and one selected hypothesis executed gives 1/1 = **100% hypothesis coverage**. It covers this seed only, not every phone format, country, encoding, client, or normalization defect. Add EP/BVA cases for format and length classes and compatibility cases for supported clients.
+
+## When to use Error Guessing
+
+Use it when specifications are incomplete or evolving, time is constrained, relevant product or domain history exists, a feature is recently changed or complex, production evidence identifies risk, or likely user/implementation mistakes deserve targeted checks. It is particularly valuable as a focused supplement after basic behavior is understood and alongside formal test design.
+
+Do not use it as the only approach for large, complex, safety-critical, security-critical, regulated, or highly concurrent systems. It is insufficient for systematic value, boundary, combination, lifecycle, branch, security, performance, reliability, accessibility, usability, or compatibility coverage.
+
+## Limitations and common mistakes
+
+Error Guessing is subjective, depends on experience and domain knowledge, can miss unfamiliar defect classes, is difficult to make exhaustive, and is vulnerable to confirmation bias. Common mistakes are:
+
+1. Treating intuition, a checklist, or an old defect as confirmed current behavior.
+2. Writing a vague hypothesis without a trigger, predicted failure, evidence, or oracle.
+3. Calling an unexpected result a defect without checking the requirement, environment, data, and reproducibility.
+4. Omitting exact messages, status codes, persistence, state, side effects, notifications, or calculations.
+5. Testing only familiar invalid values while ignoring valid-path defects.
+6. Failing to distinguish missing, blank, null, malformed, unsupported, and boundary inputs.
+7. Omitting build, locale, browser, clock, timing, retry, or cleanup data.
+8. Duplicating formal EP, BVA, decision-table, pairwise, state, or regression cases without recording the additional heuristic rationale.
+9. Counting test cases or found defects as completeness.
+10. Ignoring blocked, unresolved, untested high-risk, or non-reproducible cases.
+11. Failing to turn confirmed defects into regression seeds.
+12. Claiming that a passing checklist or 100% selected-hypothesis metric proves quality.
+
+## Complementary techniques
+
+Combine Error Guessing with:
+
+- **EP** for behaviorally distinct valid and invalid classes;
+- **BVA** for numeric, length, date/time, timeout, count, quota, and size thresholds;
+- **Decision Tables** for explicit condition/action combinations and precedence;
+- **Pairwise** for mostly independent browser, device, locale, role, flag, and environment combinations;
+- **State-Transition Testing** for lifecycle, duplicate events, retries, expiration, and recovery;
+- **use-case/scenario testing** for complete actor goals and end-to-end flows;
+- **condition/cause-effect analysis** for complex Boolean logic;
+- **model-based testing** for generated state/path sequences;
+- **risk-based testing** for selection and prioritization;
+- **exploratory testing** for investigation outside the initial model;
+- **attack/security testing** for threat-focused failure induction;
+- **regression testing** for confirmed historical and newly discovered defects;
+- **reliability, performance, accessibility, usability, and compatibility testing** for non-functional risks.
+
+## Verification checklist
+
+Before presenting an Error Guessing design, verify:
+
+- [ ] Scope, requirement or evidence basis, operation, and exact oracle are documented.
+- [ ] Evidence sources have stable IDs, references, relevance, confidence, and status.
+- [ ] Error-prone areas and their rationale are explicit.
+- [ ] Hypotheses are falsifiable, stable-IDed, evidence-linked, and distinct from defects.
+- [ ] Confirmed, Assumption, Question/TBD, and Residual risk labels are used consistently.
+- [ ] Historical defects and checklists generate targeted candidates rather than universal rules.
+- [ ] Priority distinguishes impact, likelihood, detectability, exposure, history, change risk, confidence, and execution cost where available.
+- [ ] Applicable negative, unusual, boundary, representation, duplicate, replay, retry, ordering, permission, timeout, recovery, UI, environment, persistence, and historical cases were considered.
+- [ ] Every case has deterministic setup, complete data/context, environment/timing, steps, exact oracle, evidence capture, cleanup, priority, and traceability.
+- [ ] Actual outcomes distinguish passed/disproved, confirmed defect, blocked, unresolved, and Question/TBD.
+- [ ] Defect reports contain reproducible evidence and expected-versus-actual comparison.
+- [ ] Selected hypothesis, scenario, evidence-source, area, priority, negative, regression, reproducibility, and defect-yield metrics are separate.
+- [ ] Denominators, numerators, exclusions, untested items, and residual risks are visible.
+- [ ] EP, BVA, Decision Tables, Pairwise, State-Transition, exploratory, security/attack, risk-based, regression, and non-functional follow-ups are identified.
+- [ ] No metric or defect count is presented as proof of complete coverage.
+- [ ] No vague oracle such as “the system works correctly” remains.
+- [ ] Markdown tables render correctly; there are no duplicate headings, placeholders, article metadata, source-language fragments, malformed content, or stray source text.
