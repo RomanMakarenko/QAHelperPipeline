@@ -51,7 +51,7 @@ Use the following record for future confirmed or explicitly provisional scenario
 
 ```markdown
 ### TC-<NNN>: <specific objective>
-**Category**: <Happy Path | Business Rule | Security | Negative | Edge Case | UI State>
+**Category**: <Happy Path | Business Rules | Security | Negative/Error | Edge Cases | UI State>
 **Status**: <Confirmed | Assumption | Question/TBD | Residual risk>
 **Priority**: <P0 | P1 | P2 | P3 | Question/TBD>
 **Flow/Requirement References**: <FLOW-*, REQ-*, acceptance criterion, or source location>

@@ -46,16 +46,69 @@ The full coordinator is `.claude/skills/test-pipeline/SKILL.md`. Its contract is
 
 ## Pipeline
 
-```text
-intake
-  → evidence inventory and normalization
-  → create-scenarios
-  → choose-technique
-  → applicable detailed technique skills
-  → scenario consolidation
-  → test-strategy
-  → final package and verification
+```mermaid
+flowchart LR
+    I["Intake / run setup<br/>isolated ticket/run directory"] --> E["Evidence inventory<br/>and normalization<br/><code>evidence.md</code>"]
+    E --> CS["create-scenarios<br/>six coverage lenses<br/><code>test-scenarios.md</code>"]
+    CS --> CT["choose-technique<br/><code>REQ-SIG-*</code> / <code>SEL-*</code><br/><code>technique-selection.md</code>"]
+
+    subgraph TM["Selected applicable technique models"]
+        direction TB
+        EP["Equivalence<br/>Partitioning"]
+        BVA["Boundary Value<br/>Analysis"]
+        DT["Decision<br/>Table"]
+        PW["Pairwise<br/>Testing"]
+        ST["State-Transition<br/>Testing"]
+        EG["Error<br/>Guessing"]
+    end
+
+    CT -. "selected / applicable" .-> EP
+    CT -. "selected / applicable" .-> BVA
+    CT -. "selected / applicable" .-> DT
+    CT -. "selected / applicable" .-> PW
+    CT -. "selected / applicable" .-> ST
+    CT -. "selected / applicable" .-> EG
+    CT -. "none applicable" .-> CO
+
+    EP -. "partitions inform boundaries" .-> BVA
+    EP -. "levels" .-> DT
+    BVA -. "threshold levels" .-> DT
+    EP -. "levels" .-> PW
+    BVA -. "threshold levels" .-> PW
+    DT -. "guards when needed" .-> ST
+
+    EP --> CO["Scenario consolidation<br/>and traceability review<br/>run-local <code>test-scenarios.md</code>"]
+    BVA --> CO
+    DT --> CO
+    PW --> CO
+    ST --> CO
+    EG -. "evidence-based supplement" .-> CO
+    CS -. "functional lens inventory" .-> CO
+
+    CO --> TS["test-strategy<br/>lowest adequate layer<br/><code>test-strategy.md</code>"]
+    TS --> FP["Final package<br/>and verification<br/><code>final-package.md</code>"]
+
+    TS -. "layer outputs" .-> U["Unit"]
+    TS -. "layer outputs" .-> AI["API / Integration"]
+    TS -. "layer outputs" .-> C["Component"]
+    TS -. "layer outputs" .-> X2["E2E"]
+
+    E -. "missing evidence or exact oracle" .-> B["Blocked / provisional package"]
+    B --> FP
+
+    classDef stage fill:#e8f1fb,stroke:#2563eb,color:#111827
+    classDef technique fill:#f3e8ff,stroke:#7e22ce,color:#111827
+    classDef output fill:#ecfdf5,stroke:#15803d,color:#111827
+    classDef blocked fill:#fff7ed,stroke:#c2410c,color:#111827
+    class I,E,CS,CT,CO,TS,FP stage
+    class EP,BVA,DT,PW,ST,EG technique
+    class U,AI,C,X2 output
+    class B blocked
 ```
+
+**Fallback:** `intake → evidence inventory → create-scenarios → choose-technique → selected technique models → scenario consolidation → test-strategy → final package`.
+
+One run flows through evidence, scenarios, selected technique models, consolidation, layer strategy, and a verified package. Dashed technique arrows show conditional selection or modeling dependencies, not additional execution stages; `Unit`, `API/Integration`, `Component`, and `E2E` are strategy outputs, not techniques. Canonical outputs stay under `artifacts/test-pipeline/<slug>/<run-id>/`.
 
 Each stage writes or references a hand-off. Independent technique models may be designed separately, but consolidation and strategy analysis are ordered stages.
 
@@ -137,7 +190,7 @@ Design coverage, technique-model coverage, layer assignment, and execution cover
 
 ## Blocked and partial results
 
-A run may be `Complete`, `Partial`, `Blocked`, or `Failed`. The package must preserve completed upstream artifacts and identify the stage that stopped. In a blocked run, executable scenario count may be zero and strategy assignments may be `Pending`; this is an evidence-inventory fact, not proof of no product behavior or defects.
+A run may be `Started`, `Complete`, `Partial`, `Blocked`, or `Failed`. The package must preserve completed upstream artifacts and identify the stage that stopped. In a blocked run, executable scenario count may be zero and strategy assignments may be `Pending`; this is an evidence-inventory fact, not proof of no product behavior or defects.
 
 Typical blockers include missing requirements, an unknowable oracle, unavailable ticket content, conflicting sources, absent implementation references, or no suitable test harness. The pipeline records the blocker and the next question instead of inventing a solution.
 

@@ -10,7 +10,11 @@
 - skill для розподілу сценаріїв по рівнях тестової піраміди;
 - Markdown-документи, які передають результати між етапами.
 
-Однак повністю автоматичний процес виду `Jira ticket → готові автотести` ще не реалізований. Наразі немає єдиного orchestrator skill, автоматичного ticket intake, генератора коду автотестів або інтеграції з test-management системою.
+Повністю автоматичний процес виду `Jira ticket → готові автотести` ще не реалізований. Guided orchestrator skill `.claude/skills/test-pipeline/SKILL.md` уже існує та координує hand-offs у межах Claude session, але автоматичного ticket intake, executable workflow engine, генератора коду автотестів або інтеграції з test-management системою немає.
+
+За замовчуванням результати ticket/run зберігаються ізольовано в `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/`. Спільні `docs/test-scenarios.md` і `docs/test-strategy.md` залишаються project-level contracts/templates або явно запитаними legacy projections.
+
+> Цей документ містить історичні hand-off notes. У місцях, де нижче згадуються майбутні компоненти, враховуйте актуальний статус цього розділу та `README.md`.
 
 ## Загальна схема
 
@@ -65,11 +69,13 @@ Ticket або вимоги
 | Edge Cases | `TC-400`–`TC-499` | Межі, limits, formats, timing, ordering, locale та precision |
 | UI State | `TC-500`–`TC-599` | Loading, empty, error, validation, disabled, conditional та responsive states |
 
-Результат записується у:
+У direct/shared режимі результат може записуватися у:
 
 ```text
 docs/test-scenarios.md
 ```
+
+Під час `test-pipeline` run canonical output записується у run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-scenarios.md`; shared file не змінюється без explicit legacy projection.
 
 Кожен сценарій має містити:
 
@@ -192,7 +198,7 @@ docs/TestDesignAndSoftwareTestingTechniques/BlackBox/errorGuessing.md
 
 Призначення:
 
-- читати `docs/test-scenarios.md`;
+- читати run-local `test-scenarios.md` під час orchestrated ticket run або `docs/test-scenarios.md` у direct/shared режимі;
 - перевіряти scenario IDs, категорії, references та exact oracles;
 - знаходити реальні application sources та test harnesses у repository;
 - призначати найнижчий adequate test-pyramid layer;
@@ -200,11 +206,13 @@ docs/TestDesignAndSoftwareTestingTechniques/BlackBox/errorGuessing.md
 - виявляти pyramid anti-patterns;
 - описувати defense-in-depth для критичних правил.
 
-Результат записується у:
+У direct/shared режимі результат може записуватися у:
 
 ```text
 docs/test-strategy.md
 ```
+
+Під час `test-pipeline` run canonical output записується у run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-strategy.md`; shared file не змінюється без explicit legacy projection.
 
 ## Як розподіляються тести по test pyramid
 
@@ -243,6 +251,8 @@ docs/test-strategy.md
 
 ### Крок 1. Intake ticket
 
+Для повного guided run використовується `.claude/skills/test-pipeline/SKILL.md`; окремі skills також можна запускати напряму.
+
 На вхід можуть подаватися:
 
 - ticket summary;
@@ -266,7 +276,7 @@ docs/test-strategy.md
 
 ### Крок 2. Scenario generation
 
-Запускається `create-scenarios`.
+Запускається `create-scenarios`. У повному orchestrated run він отримує explicit run-local destination; його documented shared default застосовується лише у direct/shared режимі.
 
 Skill:
 
@@ -277,7 +287,9 @@ Skill:
 5. формує `TC-*` scenarios;
 6. додає priorities, preconditions, steps та exact oracles;
 7. фіксує gaps, assumptions та residual risks;
-8. записує результат у `docs/test-scenarios.md`.
+8. у direct/shared режимі записує результат у `docs/test-scenarios.md`; під час orchestrated run записує його у run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-scenarios.md`.
+
+Усі ticket-specific outputs мають залишатися в межах run directory; shared document є legacy projection лише за explicit request.
 
 ### Крок 3. Technique selection
 
@@ -310,7 +322,7 @@ Skill аналізує:
 
 ### Крок 5. Scenario consolidation
 
-Результати технік об’єднуються у `docs/test-scenarios.md`.
+Результати технік об’єднуються у run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-scenarios.md` під час orchestrated run. У direct/shared режимі допустимий `docs/test-scenarios.md`; це legacy projection, а не canonical ticket history.
 
 Потрібно:
 
@@ -327,7 +339,7 @@ Skill аналізує:
 
 Він:
 
-1. читає `docs/test-scenarios.md`;
+1. під час orchestrated run читає run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-scenarios.md`; у direct/shared режимі читає `docs/test-scenarios.md`;
 2. перевіряє структуру scenario records;
 3. сканує фактичні repository sources;
 4. визначає required boundaries та oracle;
@@ -336,7 +348,9 @@ Skill аналізує:
 7. фіксує contested decisions;
 8. аналізує defense-in-depth;
 9. формує distribution table;
-10. записує результат у `docs/test-strategy.md`.
+10. під час orchestrated run записує результат у run-local `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/test-strategy.md`; у direct/shared режимі записує `docs/test-strategy.md`.
+
+Усі ticket-specific outputs мають залишатися в межах run directory; shared document є legacy projection лише за explicit request.
 
 ### Крок 7. Final test-case package
 
@@ -361,18 +375,29 @@ technique-specific models
 
 ## Що працює зараз
 
-У поточному вигляді pipeline можна використовувати як напівавтоматичний процес:
+У поточному вигляді pipeline можна використовувати як guided напівавтоматичний процес:
 
 ```text
 1. Передати Claude текст ticket або requirements.
-2. Запустити create-scenarios.
-3. Передати окремі requirement areas у choose-technique.
-4. Запустити відповідні technique skills.
-5. Оновити docs/test-scenarios.md.
-6. Запустити test-strategy.
-7. Отримати docs/test-strategy.md.
-8. На основі документів сформувати final test cases.
+2. Запустити `.claude/skills/test-pipeline/SKILL.md` або окремі child skills.
+3. Для orchestrated run зберігати hand-offs у `artifacts/test-pipeline/<ticket-or-feature-slug>/<run-id>/`.
+4. У direct/shared режимі явно використовувати `docs/test-scenarios.md` та `docs/test-strategy.md`.
+5. На основі документів сформувати final test cases.
 ```
+
+`test-pipeline` координує послідовність, але не є executable workflow engine; `test-strategy` має intentional `disable-model-invocation: true`, тому orchestrator застосовує його contract у run-local контексті.
+
+Для автоматично керованого runtime pipeline ще потрібні окремі інтеграції та execution tooling.
+
+Запуск окремого `test-strategy` у direct/shared режимі:
+
+```text
+/test-strategy <feature або scope>
+```
+
+Результат direct/shared запуску зберігається у `docs/test-strategy.md` лише після explicit request; orchestrated run використовує run-local artifact.
+
+Версії skills позначені custom metadata `version: 0.1.0` і мають записуватися у run metadata лише як зафіксоване значення frontmatter, а не як автоматична runtime capability.
 
 Уже працюють правила та контракти для:
 
@@ -388,15 +413,11 @@ technique-specific models
 
 ## Що ще не реалізовано
 
-### 1. Єдиний orchestrator
+### 1. Executable orchestration engine
 
-Немає skill, який автоматично запускає весь процес однією командою.
+Guided coordinator `.claude/skills/test-pipeline/SKILL.md` уже реалізований. Він описує та координує hand-offs у межах Claude session, але не є окремим runtime engine, який програмно викликає child skills або запускає application tests.
 
-Можливий майбутній файл:
-
-```text
-.claude/skills/test-pipeline/SKILL.md
-```
+Залишаються нереалізованими автоматичний workflow execution, Jira intake без доступного connector-а, automation-code generation і test-management export.
 
 ### 2. Автоматичний ticket intake
 
@@ -411,9 +432,9 @@ technique-specific models
 
 Ticket можна передати текстом або отримати через доступний Jira connector/MCP, але автоматичний запуск повного ланцюга ще не налаштований.
 
-### 3. Автоматичний запуск skills
+### 3. Executable automatic skill invocation
 
-Немає окремої orchestration logic, яка послідовно викликає:
+Guided `test-pipeline` описує послідовність і hand-offs, але немає окремої executable orchestration logic, яка програмно викликає:
 
 ```text
 create-scenarios
@@ -421,6 +442,8 @@ create-scenarios
 → detailed technique skill(s)
 → test-strategy
 ```
+
+Це означає, що child skills не запускаються як runtime jobs без участі Claude session.
 
 ### 4. Генерація automation code
 
@@ -477,23 +500,24 @@ Markdown може залишатися human-readable presentation layer.
 9. За відсутності exact oracle scenario не може бути безпечно підтверджений.
 10. За відсутності application source неможливо правдиво послатися на функцію, endpoint, component або test harness.
 
-## Бажаний майбутній orchestrator
+## Бажані майбутні інтеграції та execution tooling
 
-Для повністю автоматичного pipeline потрібен окремий `test-pipeline` skill з приблизною логікою:
+Guided orchestrator уже має логіку, описану в `.claude/skills/test-pipeline/SKILL.md`. Для повністю автоматичного pipeline ще потрібні окремі capability-и:
 
 ```text
-1. Прийняти Jira ticket key або текст ticket.
+1. Прийняти Jira ticket key через доступний connector.
 2. Отримати ticket та доступні linked evidence.
 3. Нормалізувати requirements, actors, rules, risks та oracle.
-4. Запустити create-scenarios.
-5. Для кожної requirement area запустити choose-technique.
-6. Передати hand-offs у відповідні technique skills.
-7. Об'єднати результати у docs/test-scenarios.md.
-8. Запустити test-strategy.
-9. Об'єднати layer decisions у docs/test-strategy.md.
-10. Сформувати фінальний test-case package.
-11. Опційно експортувати cases у Jira/Xray/TestRail або automation framework.
+4. Викликати child skills через executable orchestration layer.
+5. Передати hand-offs у відповідні technique skills.
+6. Зберегти canonical outputs у run-local artifacts/test-pipeline/<slug>/<run-id>/.
+7. Запустити application test executor або automation-code generator.
+8. Опційно експортувати cases у Jira/Xray/TestRail або automation framework.
 ```
+
+Ці capability-и не є частиною поточного guided skill і потребують окремої реалізації та explicit integrations.
+
+Legacy приклади нижче ілюструють можливу структуру результату; вони не є execution evidence і не змінюють canonical artifact policy.
 
 Один ticket може мати такий результат:
 
@@ -501,12 +525,12 @@ Markdown може залишатися human-readable presentation layer.
 Ticket
   ├── FLOW-001
   │     ├── TC-001 Happy Path → E2E
-  │     ├── TC-100 Business Rule → API/Integration
-  │     ├── TC-300 Negative → API/Integration
+  │     ├── TC-100 Business Rules → API/Integration
+  │     ├── TC-300 Negative/Error → API/Integration
   │     └── TC-500 UI State → Component
   ├── FLOW-002
-  │     ├── TC-101 Rule boundary → Unit
-  │     └── TC-401 Limit case → API/Integration
+  │     ├── TC-101 Business Rules boundary → Unit
+  │     └── TC-401 Edge Cases limit → API/Integration
   └── Residual risks / Questions / Follow-ups
 ```
 
@@ -525,4 +549,4 @@ Requirements
 → pyramid strategy
 ```
 
-Але сьогодні це набір узгоджених skills та документів, які потрібно запускати послідовно. Для режиму `ticket → повний test package` необхідно додати orchestrator, ticket integration, machine-readable schemas та, за потреби, automation/test-management exporters.
+Guided orchestrator уже координує цей design flow. Для режиму `ticket → повний test package` необхідні додаткові ticket integration, executable test tooling, machine-readable schemas та, за потреби, automation/test-management exporters.

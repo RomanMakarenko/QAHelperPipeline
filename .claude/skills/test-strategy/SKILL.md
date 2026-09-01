@@ -3,12 +3,12 @@ name: test-strategy
 description: Analyze functional test scenarios and assign each to the lowest adequate Unit, API/Integration, Component, or E2E test-pyramid layer using repository evidence, risk, and traceability.
 version: 0.1.0
 disable-model-invocation: true
-argument-hint: [feature-name or blank for full analysis]
+argument-hint: "[feature-name or blank for full analysis]"
 ---
 
 # Test Strategy and Pyramid Analyst
 
-Use this skill after scenarios have been produced, or when the user supplies an equivalent scenario list. `$ARGUMENTS` scopes analysis to a feature or flow; with no argument, analyze all available scenarios. The primary input is `docs/test-scenarios.md`. Write the result to `docs/test-strategy.md` unless another output is requested.
+Use this skill after scenarios have been produced, or when the user supplies an equivalent scenario list. `$ARGUMENTS` scopes analysis to a feature or flow; with no argument, analyze all available scenarios. In direct/shared mode, the primary input is `docs/test-scenarios.md` and the default output is `docs/test-strategy.md`. In an orchestrated ticket run, use the explicit run-local input and output supplied by `test-pipeline`; do not read or mutate unrelated shared documents. `disable-model-invocation: true` intentionally keeps this strategy analysis as an explicit, reviewable hand-off; the orchestrator applies this contract directly when coordinating a run.
 
 This skill assigns test layers; it does not execute tests or rewrite scenario definitions. The `Suggested Layer` in a scenario is an input hypothesis and must be reviewed, not accepted automatically.
 
@@ -124,7 +124,7 @@ Zero assigned tests is an inventory fact, not evidence of a healthy pyramid, com
 
 ## Output sections
 
-When no format is requested, write `docs/test-strategy.md` with:
+When no format is requested in direct/shared mode, write `docs/test-strategy.md` with the following sections. During an orchestrated run, write the same sections to the explicit run-local destination supplied by `test-pipeline`:
 
 1. Scope and analysis status.
 2. Scenario and source inventory.

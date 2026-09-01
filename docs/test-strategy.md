@@ -48,7 +48,7 @@ No confirmed executable scenarios can be assigned. Do not fabricate source refer
 
 | Scenario ID | Category | Priority | Assigned Layer | Primary/Defense-in-Depth | Source/function/endpoint/component/test reference | Rationale | Lower-layer alternative | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | Pending / Question-TBD | — | Not found in repository | No executable scenario records or exact oracles | Cannot assess | Pending |
+| — | — | — | Pending / Question/TBD | — | Not found in repository | No executable scenario records or exact oracles | Cannot assess | Pending |
 
 For future records, preserve each `TC-*` ID and include the requirement/source references, exact oracle, actual discovered symbol/path, rationale, lower-layer alternative, status, and residual risk. The scenario’s Suggested Layer is not authoritative.
 
