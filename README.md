@@ -197,8 +197,6 @@ Typical blockers include missing requirements, an unknowable oracle, unavailable
 ## Related documentation
 
 - [`docs/test-pipeline.md`](docs/test-pipeline.md) — input, artifact, hand-off, rerun, and verification contract.
-- [`HANDS_OFF.md`](HANDS_OFF.md) — longer operating notes and current project hand-off context.
-- [`TASK_SPEC7.md`](TASK_SPEC7.md) — scenario-generation specification.
-- [`TASK_SPEC8.md`](TASK_SPEC8.md) — test-strategy specification.
 - [`docs/test-scenarios.md`](docs/test-scenarios.md) — shared scenario contract/template.
 - [`docs/test-strategy.md`](docs/test-strategy.md) — shared strategy contract/template.
+- [`docs/archive/`](docs/archive/) — historical task specifications and hand-off notes retained for reference.
